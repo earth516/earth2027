@@ -1,1 +1,236 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2027 수능 지구과학 문제은행</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #f3f4f6; /* bg-gray-100 */
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    </style>
+</head>
+<body class="text-gray-800">
 
+    <div class="min-h-screen flex flex-col md:flex-row">
+        
+        <!-- Sidebar for Navigation -->
+        <aside class="w-full md:w-64 bg-white shadow-md z-10 flex-shrink-0">
+            <div class="p-6">
+                <h1 class="text-2xl font-bold text-blue-600 mb-6 border-b pb-4">지구과학 문제은행</h1>
+                
+                <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">단원 선택</h2>
+                <nav id="chapter-nav" class="space-y-1">
+                    <!-- Chapters will be rendered here -->
+                </nav>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 p-6 md:p-10 overflow-y-auto">
+            <header class="mb-8 flex justify-between items-center">
+                <div>
+                    <h2 id="current-chapter-title" class="text-3xl font-bold text-gray-800">단원을 선택해주세요</h2>
+                    <p id="current-chapter-desc" class="text-gray-500 mt-2">왼쪽 메뉴에서 단원을 선택하여 문제를 풀어보세요.</p>
+                </div>
+            </header>
+
+            <!-- Question Container -->
+            <div id="question-container" class="max-w-4xl mx-auto space-y-8 hidden">
+                <!-- Questions will be injected here -->
+            </div>
+
+            <!-- Empty State -->
+            <div id="empty-state" class="flex flex-col items-center justify-center h-64 text-center">
+                <svg class="w-16 h-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                <p class="text-lg text-gray-500">학습할 단원을 선택하면 문제가 표시됩니다.</p>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Data Structure for the Question Bank
+        // In a real scenario with GitHub Pages, you might fetch this data from a JSON file
+        // or just have it hardcoded if the dataset isn't massive.
+        const db = {
+            chapters: [
+                {
+                    id: 'ch1',
+                    title: 'I. 고체 지구',
+                    description: '지권의 변동, 지구의 역사'
+                },
+                {
+                    id: 'ch2',
+                    title: 'II. 대기와 해양',
+                    description: '대기와 해양의 변화, 상호 작용'
+                },
+                {
+                    id: 'ch3',
+                    title: 'III. 우주',
+                    description: '별과 외계 행성계, 외부 은하와 우주 팽창'
+                }
+            ],
+            questions: [
+                // 1단원 (고체 지구) 문제들
+                {
+                    id: 'q1_1',
+                    chapterId: 'ch1',
+                    number: 1,
+                    // 실제 폴더 구조에 맞게 경로 수정 (ch1 폴더 안의 q/1번_문제.png)
+                    questionImage: 'ch1/q/1번_문제.png', 
+                    answerImage: 'ch1/a/1번_해설.png'
+                },
+                {
+                    id: 'q1_2',
+                    chapterId: 'ch1',
+                    number: 2,
+                    questionImage: 'ch1/q/2번_문제.png',
+                    answerImage: 'ch1/a/2번_해설.png'
+                },
+                // 2단원 문제들 (필요한 만큼 추가)
+                 {
+                    id: 'q2_1',
+                    chapterId: 'ch2',
+                    number: 1,
+                    questionImage: 'ch2/q/1번_문제.png',
+                    answerImage: 'ch2/a/1번_해설.png'
+                }
+            ]
+        };
+
+        // DOM Elements
+        const chapterNav = document.getElementById('chapter-nav');
+        const currentChapterTitle = document.getElementById('current-chapter-title');
+        const currentChapterDesc = document.getElementById('current-chapter-desc');
+        const questionContainer = document.getElementById('question-container');
+        const emptyState = document.getElementById('empty-state');
+
+        let currentChapterId = null;
+
+        function renderNavigation() {
+            chapterNav.innerHTML = '';
+            db.chapters.forEach(chapter => {
+                const btn = document.createElement('button');
+                btn.className = `w-full text-left px-4 py-3 rounded-lg transition-colors duration-150 font-medium ${
+                    currentChapterId === chapter.id 
+                    ? 'bg-blue-50 text-blue-700' 
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`;
+                btn.innerText = chapter.title;
+                btn.onclick = () => selectChapter(chapter.id);
+                chapterNav.appendChild(btn);
+            });
+        }
+
+        function selectChapter(chapterId) {
+            currentChapterId = chapterId;
+            renderNavigation(); // Update active state
+
+            const chapter = db.chapters.find(c => c.id === chapterId);
+            if (chapter) {
+                currentChapterTitle.innerText = chapter.title;
+                currentChapterDesc.innerText = chapter.description;
+                
+                const chapterQuestions = db.questions.filter(q => q.chapterId === chapterId);
+                renderQuestions(chapterQuestions);
+                
+                emptyState.classList.add('hidden');
+                questionContainer.classList.remove('hidden');
+            }
+        }
+
+        function renderQuestions(questions) {
+            questionContainer.innerHTML = '';
+            
+            if (questions.length === 0) {
+                questionContainer.innerHTML = `
+                    <div class="bg-white p-8 rounded-xl shadow-sm text-center">
+                        <p class="text-gray-500">이 단원에는 아직 등록된 문제가 없습니다.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            questions.forEach(q => {
+                const qEl = document.createElement('div');
+                qEl.className = 'bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200 fade-in';
+                
+                // Structure for a single question item
+                qEl.innerHTML = `
+                    <div class="p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-bold text-gray-800">문제 ${q.number}</h3>
+                            <span class="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold">2027 대비</span>
+                        </div>
+                        
+                        <!-- Question Image -->
+                        <div class="mb-6 border rounded-lg p-2 bg-white">
+                            <img src="${q.questionImage}" alt="문제 ${q.number}" class="w-full h-auto rounded" onerror="this.src='https://placehold.co/800x400/fee2e2/991b1b?text=이미지+로드+실패'">
+                        </div>
+
+                        <!-- Action Button -->
+                        <div class="flex justify-end">
+                            <button onclick="toggleAnswer('${q.id}')" id="btn-toggle-${q.id}" class="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium flex items-center gap-2">
+                                <span>정답 및 해설 보기</span>
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Answer Section (Hidden by default) -->
+                    <div id="answer-${q.id}" class="hidden border-t border-gray-100 bg-gray-50 p-6">
+                        <h4 class="font-bold text-gray-700 mb-3 flex items-center gap-2">
+                            <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            해설
+                        </h4>
+                        <div class="border rounded-lg p-2 bg-white shadow-inner">
+                            <img src="${q.answerImage}" alt="해설 ${q.number}" class="w-full h-auto rounded" onerror="this.src='https://placehold.co/800x400/fee2e2/991b1b?text=해설+이미지+로드+실패'">
+                        </div>
+                    </div>
+                `;
+                questionContainer.appendChild(qEl);
+            });
+        }
+
+        // Make toggle function available globally
+        window.toggleAnswer = function(questionId) {
+            const answerDiv = document.getElementById(`answer-${questionId}`);
+            const btn = document.getElementById(`btn-toggle-${questionId}`);
+            const span = btn.querySelector('span');
+            const icon = btn.querySelector('svg');
+
+            if (answerDiv.classList.contains('hidden')) {
+                // Show Answer
+                answerDiv.classList.remove('hidden');
+                answerDiv.classList.add('fade-in');
+                btn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                btn.classList.add('bg-gray-600', 'hover:bg-gray-700');
+                span.innerText = '해설 닫기';
+                icon.style.transform = 'rotate(180deg)';
+                icon.style.transition = 'transform 0.3s';
+            } else {
+                // Hide Answer
+                answerDiv.classList.add('hidden');
+                answerDiv.classList.remove('fade-in');
+                btn.classList.remove('bg-gray-600', 'hover:bg-gray-700');
+                btn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                span.innerText = '정답 및 해설 보기';
+                icon.style.transform = 'rotate(0deg)';
+            }
+        };
+
+        // Initialize the app
+        renderNavigation();
+    </script>
+</body>
+</html>
