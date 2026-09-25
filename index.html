@@ -159,21 +159,12 @@
         // Data Structure for the Question Bank
         const db = {
             chapters: [
-                {
-                    id: 'ch1',
-                    title: 'I. 고체 지구',
-                    description: '지권의 변동, 지구의 역사'
-                },
-                {
-                    id: 'ch2',
-                    title: 'II. 대기와 해양',
-                    description: '대기와 해양의 변화, 상호 작용'
-                },
-                {
-                    id: 'ch3',
-                    title: 'III. 우주',
-                    description: '별과 외계 행성계, 외부 은하와 우주 팽창'
-                }
+                { id: 'ch1', title: '1. 지권의 변동', description: '1번 ~ 48번' },
+                { id: 'ch2', title: '2. 지구의 역사', description: '49번 ~ 102번' },
+                { id: 'ch3', title: '3. 대기와 해양의 변화', description: '103번 ~ 142번' },
+                { id: 'ch4', title: '4. 상호작용', description: '143번 ~ 206번' },
+                { id: 'ch5', title: '5. 별과 외계 행성계', description: '207번 ~ 270번' },
+                { id: 'ch6', title: '6. 외부 은하와 우주 팽창', description: '271번 ~ 끝' }
             ],
             questions: [] // 폴더 자동 스캔 알고리즘을 통해 자동으로 채워집니다.
         };
@@ -475,18 +466,18 @@
             }
         }
 
-        // 특정 챕터 폴더에 몇 번 문제까지 있는지 초고속으로 찾는 함수
-        async function findMaxQuestionCount(chapterId) {
+        // 통합 'q' 폴더에서 전체 문제의 마지막 번호를 찾는 함수
+        async function findMaxQuestionCount() {
             let low = 1;
             let high = 1;
 
             // 1번 문제가 없으면 0개 반환
-            if (!(await checkFileExists(`${chapterId}/q/1번_문제.png`))) {
+            if (!(await checkFileExists(`q/1번_문제.png`))) {
                 return 0; 
             }
 
             // 1. 배수 탐색 (1, 2, 4, 8, 16, 32...) 으로 대략적인 한계점 찾기
-            while (await checkFileExists(`${chapterId}/q/${high}번_문제.png`)) {
+            while (await checkFileExists(`q/${high}번_문제.png`)) {
                 low = high;
                 high *= 2;
             }
@@ -498,7 +489,7 @@
             
             while (l <= h) {
                 const mid = Math.floor((l + h) / 2);
-                if (await checkFileExists(`${chapterId}/q/${mid}번_문제.png`)) {
+                if (await checkFileExists(`q/${mid}번_문제.png`)) {
                     maxFound = mid; // 존재하면 더 높은 숫자 탐색
                     l = mid + 1;
                 } else {
@@ -508,33 +499,34 @@
             return maxFound;
         }
 
+        // 문제 번호에 따라 단원 ID를 자동 할당해 주는 함수
+        function getChapterId(num) {
+            if (num >= 1 && num <= 48) return 'ch1';
+            if (num >= 49 && num <= 102) return 'ch2';
+            if (num >= 103 && num <= 142) return 'ch3';
+            if (num >= 143 && num <= 206) return 'ch4';
+            if (num >= 207 && num <= 270) return 'ch5';
+            return 'ch6'; // 271 이상은 모두 마지막 단원으로 배정
+        }
+
         // 앱 초기화 및 자동 스캔 실행
         async function initApp() {
             showModal("폴더에서 문제 데이터를 자동으로 스캔 중입니다...\n잠시만 기다려주세요.");
             
-            // 각 챕터별로 스캔을 동시에 진행
-            const scanPromises = db.chapters.map(async (chapter) => {
-                const maxNum = await findMaxQuestionCount(chapter.id);
-                const chapterQuestions = [];
-                for (let i = 1; i <= maxNum; i++) {
-                    chapterQuestions.push({
-                        id: `q_${chapter.id}_${i}`,
-                        chapterId: chapter.id,
-                        number: i,
-                        questionImage: `${chapter.id}/q/${i}번_문제.png`,
-                        answerImage: `${chapter.id}/a/${i}번_해설.png`
-                    });
-                }
-                return chapterQuestions;
-            });
-
-            // 모든 폴더 스캔이 끝날 때까지 대기
-            const results = await Promise.all(scanPromises);
+            // 1. 단일 q 폴더에서 마지막 문제 번호 스캔
+            const maxNum = await findMaxQuestionCount();
             
-            // 스캔된 결과를 메인 데이터(db.questions)에 합치기
-            results.forEach(questions => {
-                db.questions = db.questions.concat(questions);
-            });
+            // 2. 1번부터 최대 번호까지 루프 돌면서 카테고리 자동 분류
+            for (let i = 1; i <= maxNum; i++) {
+                const chapterId = getChapterId(i);
+                db.questions.push({
+                    id: `q_${i}`,
+                    chapterId: chapterId,
+                    number: i,
+                    questionImage: `q/${i}번_문제.png`, // 통일된 경로 적용
+                    answerImage: `a/${i}번_해설.png`    // 통일된 경로 적용
+                });
+            }
 
             closeModal(); // 로딩 알림창 닫기
             renderNavigation(); // 완료 후 좌측 메뉴 그리기
