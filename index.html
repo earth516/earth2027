@@ -26,24 +26,14 @@
         
         /* 🖨️ 인쇄(PDF 저장)용 스타일 추가 */
         @media print {
-            body * { visibility: hidden; }
-            
-            .print-mode #main-scroll-area, 
-            .print-mode #main-scroll-area *,
-            .print-mode #question-container,
-            .print-mode #question-container * {
-                visibility: visible;
-            }
-            
-            .print-mode #main-scroll-area {
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: 100%;
-                overflow: visible;
-                padding: 0;
-            }
-            
+            /* 1. 전체 화면 고정 및 스크롤 강제 해제 (여러 장 출력 짤림 방지 핵심!) */
+            html, body, main, #main-scroll-area, #question-container {
+                height: auto !important;
+                min-height: auto !important;
+                overflow: visible !important;
+                position: static !important;
+                display: block !important;
+                background: white !important;
             /* 페이지 짤림 방지 및 스타일 제거 */
             .print-mode .question-card {
                 page-break-inside: avoid;
@@ -57,16 +47,22 @@
             .print-mode button, 
             .print-mode #timer-display,
             .print-mode header,
-            .print-mode aside {
+            .print-mode aside,
+            .print-mode .mock-intro-box {
                 display: none !important;
             }
             
             /* 문제만 출력 모드 */
             .print-q .answer-section { display: none !important; }
             
-            /* 해설만 출력 모드 */
+            /* 5. 해설만 출력 모드 */
             .print-a .question-image-section { display: none !important; }
-            .print-a .answer-section { display: block !important; border: none; padding: 0; }
+            .print-a .answer-section { 
+                display: block !important; 
+                border: none !important; 
+                padding: 0 !important; 
+                background: transparent !important; 
+            }
         }
     </style>
 </head>
@@ -315,21 +311,55 @@
             renderNavigation(); // Update active state visually
 
             currentChapterTitle.innerText = "모의고사 만들기";
-            currentChapterDesc.innerText = "전 범위에서 무작위로 문제를 출제합니다.";
+            currentChapterDesc.innerText = "출제 범위를 선택하고 실전처럼 테스트해 보세요.";
 
-            // Render Intro Screen
+            // 단원 체크박스 동적 생성
+            let checkboxesHtml = db.chapters.map(ch => `
+                <label class="flex items-center gap-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-gray-200">
+                    <input type="checkbox" value="${ch.id}" checked class="w-5 h-5 text-purple-600 rounded border-gray-300 focus:ring-purple-500 cursor-pointer">
+                    <span class="text-gray-700 font-medium text-sm md:text-base">${ch.title}</span>
+                </label>
+            `).join('');
+
+            // 모의고사 인트로 화면 렌더링 (체크박스와 PDF 버튼 포함)
             questionContainer.innerHTML = `
-                <div class="bg-white p-10 md:p-14 rounded-3xl shadow-sm border border-gray-100 text-center mt-4 md:mt-10 fade-in">
-                    <div class="w-24 h-24 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <svg class="w-12 h-12 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <div class="mock-intro-box bg-white p-8 md:p-12 rounded-3xl shadow-sm border border-gray-100 text-center mt-4 md:mt-10 fade-in">
+                    <div class="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <svg class="w-10 h-10 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                     </div>
-                    <h3 class="text-2xl md:text-3xl font-extrabold text-gray-800 mb-4 tracking-tight">준비되셨나요?</h3>
-                    <p class="text-gray-500 mb-10 max-w-md mx-auto leading-relaxed">모의고사 시작 버튼을 누르면 <strong class="text-purple-600">30분의 타이머</strong>가 작동하며 최대 20개의 문제가 무작위로 출제됩니다.</p>
+                    <h3 class="text-2xl md:text-3xl font-extrabold text-gray-800 mb-4 tracking-tight">모의고사 설정</h3>
+                    <p class="text-gray-500 mb-8 max-w-md mx-auto leading-relaxed">학습한 단원을 선택하고 모의고사를 시작하세요. 선택된 범위 내에서 무작위로 최대 20문제가 출제됩니다.</p>
+                    
+                    <!-- 출제 범위 선택 (체크박스) -->
+                    <div class="text-left max-w-2xl mx-auto mb-10 bg-slate-50 p-6 rounded-2xl border border-gray-200 shadow-inner">
+                        <h4 class="font-bold text-gray-700 mb-4 px-2 flex items-center gap-2">
+                            <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+                            출제 범위 선택
+                        </h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" id="mock-chapter-checkboxes">
+                            ${checkboxesHtml}
+                        </div>
+                    </div>
+
+                    <!-- 시작 버튼 -->
                     <button onclick="startMockExam()" class="px-8 py-4 bg-purple-600 text-white text-lg rounded-2xl hover:bg-purple-700 hover:shadow-lg transition-all font-bold flex items-center justify-center gap-3 mx-auto w-full sm:w-auto transform hover:-translate-y-1">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                         모의고사 시작하기
                     </button>
+
+                    <!-- PDF 다운로드 버튼 (시작 전에는 숨김 처리됨) -->
+                    <div id="mock-pdf-buttons" class="hidden justify-center gap-3 mt-6 fade-in flex-wrap">
+                        <button onclick="printPDF('q')" class="px-5 py-3 bg-gray-800 text-white text-sm font-bold rounded-xl shadow hover:bg-gray-700 transition-colors flex items-center gap-2">
+                            📝 문제 PDF 저장
+                        </button>
+                        <button onclick="printPDF('a')" class="px-5 py-3 bg-green-700 text-white text-sm font-bold rounded-xl shadow hover:bg-green-600 transition-colors flex items-center gap-2">
+                            💡 해설 PDF 저장
+                        </button>
+                    </div>
                 </div>
+
+                <!-- 섞인 모의고사 문제가 렌더링될 영역을 별도로 분리 -->
+                <div id="mock-questions-render-area" class="space-y-8 mt-8 pb-10"></div>
             `;
             
             emptyState.classList.add('hidden');
@@ -341,37 +371,57 @@
         }
 
         function startMockExam() {
-            // Get all questions and shuffle
-            const allQuestions = [...db.questions];
+            // 1. 체크된 단원 확인하기
+            const checkboxes = document.querySelectorAll('#mock-chapter-checkboxes input[type="checkbox"]:checked');
+            const selectedChapterIds = Array.from(checkboxes).map(cb => cb.value);
+
+            if (selectedChapterIds.length === 0) {
+                showModal("출제할 단원을 최소 1개 이상 선택해주세요.");
+                return;
+            }
+
+            // 2. 선택된 단원의 문제만 필터링
+            const filteredQuestions = db.questions.filter(q => selectedChapterIds.includes(q.chapterId));
+
+            if (filteredQuestions.length === 0) {
+                showModal("선택한 단원에 문제가 없습니다. 폴더에 파일이 있는지 확인해주세요.");
+                return;
+            }
+
+            // 3. 문제 섞기 (최대 20개 추출)
+            const allQuestions = [...filteredQuestions];
             for (let i = allQuestions.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [allQuestions[i], allQuestions[j]] = [allQuestions[j], allQuestions[i]];
             }
-
-            // Pick up to 20
             const mockQuestions = allQuestions.slice(0, 20);
 
-            // 설명창에 PDF 다운로드 버튼 추가
-            currentChapterDesc.innerHTML = `
-                <div class="flex flex-wrap items-center gap-4 mt-2">
-                    <span class="text-sm font-medium">제한 시간 30분! 실전처럼 집중해서 풀어보세요.</span>
-                    <div class="flex gap-2">
-                        <button onclick="printPDF('q')" class="px-3 py-1.5 bg-gray-800 text-white text-xs font-bold rounded-lg shadow hover:bg-gray-700 transition-colors">📝 문제 PDF 저장</button>
-                        <button onclick="printPDF('a')" class="px-3 py-1.5 bg-green-700 text-white text-xs font-bold rounded-lg shadow hover:bg-green-600 transition-colors">💡 해설 PDF 저장</button>
-                    </div>
-                </div>
-            `;
+            // 4. UI 업데이트
+            currentChapterDesc.innerText = "제한 시간 30분! 실전처럼 집중해서 풀어보세요.";
             
-            renderQuestions(mockQuestions, true);
+            // 모의고사가 시작되면 PDF 버튼을 표시합니다.
+            const pdfButtons = document.getElementById('mock-pdf-buttons');
+            pdfButtons.classList.remove('hidden');
+            pdfButtons.classList.add('flex');
+
+            // 5. 문제 렌더링 (대상 영역을 mock-questions-render-area로 지정)
+            renderQuestions(mockQuestions, true, 'mock-questions-render-area');
+            
+            // 타이머 시작
             startTimer();
-            mainScrollArea.scrollTo(0, 0);
+            
+            // 화면을 첫 번째 문제가 있는 곳으로 부드럽게 스크롤 이동
+            setTimeout(() => {
+                document.getElementById('mock-questions-render-area').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
         }
 
-        function renderQuestions(questions, isMock = false) {
-            questionContainer.innerHTML = '';
+        function renderQuestions(questions, isMock = false, targetId = 'question-container') {
+            const container = document.getElementById(targetId);
+            container.innerHTML = '';
             
             if (questions.length === 0) {
-                questionContainer.innerHTML = `
+                container.innerHTML = `
                     <div class="bg-white p-10 rounded-2xl shadow-sm text-center border border-gray-100 fade-in">
                         <p class="text-gray-500">이 단원에 등록된 문제가 없습니다. 폴더에 파일이 있는지 확인해주세요.</p>
                     </div>
@@ -423,7 +473,7 @@
                         </div>
                     </div>
                 `;
-                questionContainer.appendChild(qEl);
+                container.appendChild(qEl);
             });
         }
 
