@@ -130,29 +130,7 @@
                     description: '별과 외계 행성계, 외부 은하와 우주 팽창'
                 }
             ],
-            questions: [
-                {
-                    id: 'q1_1',
-                    chapterId: 'ch1',
-                    number: 1,
-                    questionImage: 'ch1/q/1번_문제.png', 
-                    answerImage: 'ch1/a/1번_해설.png'
-                },
-                {
-                    id: 'q1_2',
-                    chapterId: 'ch1',
-                    number: 2,
-                    questionImage: 'ch1/q/2번_문제.png',
-                    answerImage: 'ch1/a/2번_해설.png'
-                },
-                 {
-                    id: 'q2_1',
-                    chapterId: 'ch2',
-                    number: 1,
-                    questionImage: 'ch2/q/1번_문제.png',
-                    answerImage: 'ch2/a/1번_해설.png'
-                }
-            ]
+            questions: [] // 폴더 자동 스캔 알고리즘을 통해 자동으로 채워집니다.
         };
 
         // DOM Elements
@@ -404,8 +382,87 @@
             }
         };
 
+        // ==========================================
+        // 🚀 자동 폴더 스캔 알고리즘 (이진 탐색 적용)
+        // ==========================================
+        
+        // 특정 파일이 존재하는지 가볍게(HEAD) 찔러보는 함수
+        async function checkFileExists(url) {
+            try {
+                const response = await fetch(url, { method: 'HEAD', cache: 'no-cache' });
+                return response.ok;
+            } catch {
+                return false;
+            }
+        }
+
+        // 특정 챕터 폴더에 몇 번 문제까지 있는지 초고속으로 찾는 함수
+        async function findMaxQuestionCount(chapterId) {
+            let low = 1;
+            let high = 1;
+
+            // 1번 문제가 없으면 0개 반환
+            if (!(await checkFileExists(`${chapterId}/q/1번_문제.png`))) {
+                return 0; 
+            }
+
+            // 1. 배수 탐색 (1, 2, 4, 8, 16, 32...) 으로 대략적인 한계점 찾기
+            while (await checkFileExists(`${chapterId}/q/${high}번_문제.png`)) {
+                low = high;
+                high *= 2;
+            }
+
+            // 2. 이진 탐색 (업다운 게임) 으로 정확한 마지막 문제 번호 찾기
+            let maxFound = low;
+            let l = low;
+            let h = high - 1;
+            
+            while (l <= h) {
+                const mid = Math.floor((l + h) / 2);
+                if (await checkFileExists(`${chapterId}/q/${mid}번_문제.png`)) {
+                    maxFound = mid; // 존재하면 더 높은 숫자 탐색
+                    l = mid + 1;
+                } else {
+                    h = mid - 1; // 존재하지 않으면 더 낮은 숫자 탐색
+                }
+            }
+            return maxFound;
+        }
+
+        // 앱 초기화 및 자동 스캔 실행
+        async function initApp() {
+            showModal("폴더에서 문제 데이터를 자동으로 스캔 중입니다...\n잠시만 기다려주세요.");
+            
+            // 각 챕터별로 스캔을 동시에 진행
+            const scanPromises = db.chapters.map(async (chapter) => {
+                const maxNum = await findMaxQuestionCount(chapter.id);
+                const chapterQuestions = [];
+                for (let i = 1; i <= maxNum; i++) {
+                    chapterQuestions.push({
+                        id: `q_${chapter.id}_${i}`,
+                        chapterId: chapter.id,
+                        number: i,
+                        questionImage: `${chapter.id}/q/${i}번_문제.png`,
+                        answerImage: `${chapter.id}/a/${i}번_해설.png`
+                    });
+                }
+                return chapterQuestions;
+            });
+
+            // 모든 폴더 스캔이 끝날 때까지 대기
+            const results = await Promise.all(scanPromises);
+            
+            // 스캔된 결과를 메인 데이터(db.questions)에 합치기
+            results.forEach(questions => {
+                db.questions = db.questions.concat(questions);
+            });
+
+            closeModal(); // 로딩 알림창 닫기
+            renderNavigation(); // 완료 후 좌측 메뉴 그리기
+        }
+
         // Initialize the app
-        renderNavigation();
+        initApp();
     </script>
 </body>
 </html>
