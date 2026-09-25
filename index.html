@@ -48,7 +48,8 @@
             .print-mode #timer-display,
             .print-mode header,
             .print-mode aside,
-            .print-mode .mock-intro-box {
+            .print-mode .mock-intro-box,
+            .print-mode .draw-toolbar {
                 display: none !important;
             }
             
@@ -448,9 +449,27 @@
                             ${sourceBadge}
                         </div>
                         
-                        <!-- Question Image (클래스 question-image-section 추가) -->
-                        <div class="question-image-section mb-8 border border-gray-100 rounded-xl p-3 bg-gray-50 flex justify-center">
-                            <img src="${q.questionImage}" alt="${questionLabel}" class="max-w-full h-auto rounded-lg" onerror="this.src='https://placehold.co/800x400/f8fafc/94a3b8?text=이미지+로드+실패'">
+                        <!-- 필기 도구 툴바 -->
+                        <div class="draw-toolbar flex justify-end gap-2 mb-3">
+                            <div id="draw-tools-${q.id}" class="hidden items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-lg shadow-inner">
+                                <button onclick="setDrawColor('${q.id}', 'black', this)" class="w-6 h-6 rounded-full bg-black ring-2 ring-offset-1 ring-gray-400 transition-all color-btn-${q.id}"></button>
+                                <button onclick="setDrawColor('${q.id}', 'red', this)" class="w-6 h-6 rounded-full bg-red-500 ring-2 ring-offset-1 ring-transparent transition-all color-btn-${q.id}"></button>
+                                <button onclick="setDrawColor('${q.id}', 'blue', this)" class="w-6 h-6 rounded-full bg-blue-500 ring-2 ring-offset-1 ring-transparent transition-all color-btn-${q.id}"></button>
+                                <div class="w-px h-5 bg-gray-300 mx-1"></div>
+                                <button onclick="setDrawMode('${q.id}', 'eraser')" class="text-sm font-bold text-gray-600 hover:text-gray-900 px-2 py-1 rounded hover:bg-gray-200">지우개</button>
+                                <button onclick="clearCanvas('${q.id}')" class="text-sm font-bold text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50">전체지우기</button>
+                            </div>
+                            <button onclick="toggleDrawMode('${q.id}')" id="btn-draw-${q.id}" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-semibold flex items-center gap-2 text-sm border border-gray-200">
+                                ✏️ 필기 켜기
+                            </button>
+                        </div>
+
+                        <!-- Question Image with Canvas overlay (클래스 및 캔버스 추가) -->
+                        <div class="question-image-section mb-8 border border-gray-100 rounded-xl p-3 bg-gray-50 flex justify-center overflow-hidden">
+                            <div class="relative inline-block max-w-full">
+                                <img id="img-${q.id}" src="${q.questionImage}" alt="${questionLabel}" class="max-w-full h-auto rounded-lg select-none" draggable="false" onload="setupCanvas('${q.id}')" onerror="this.src='https://placehold.co/800x400/f8fafc/94a3b8?text=이미지+로드+실패'">
+                                <canvas id="canvas-${q.id}" class="absolute top-0 left-0 w-full h-full touch-none z-10 rounded-lg" style="pointer-events: none;"></canvas>
+                            </div>
                         </div>
 
                         <!-- Action Button -->
@@ -581,6 +600,141 @@
             closeModal(); // 로딩 알림창 닫기
             renderNavigation(); // 완료 후 좌측 메뉴 그리기
         }
+
+        const canvasContexts = {};
+
+        window.setupCanvas = function(qId) {
+            const img = document.getElementById(`img-${qId}`);
+            const canvas = document.getElementById(`canvas-${qId}`);
+            if (!img || !canvas) return;
+
+            // 원본 이미지 해상도에 맞춰 캔버스 크기 설정 (선 화질 깨짐 방지)
+            canvas.width = img.naturalWidth || 800;
+            canvas.height = img.naturalHeight || 400;
+
+            const ctx = canvas.getContext('2d');
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            canvasContexts[qId] = {
+                ctx: ctx,
+                isDrawing: false,
+                color: 'black',
+                mode: 'pen'
+            };
+
+            // 마우스/터치 좌표를 캔버스 해상도에 맞게 변환
+            const getMousePos = (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                let clientX = e.clientX;
+                let clientY = e.clientY;
+                
+                if (e.touches && e.touches.length > 0) {
+                    clientX = e.touches[0].clientX;
+                    clientY = e.touches[0].clientY;
+                }
+                
+                return {
+                    x: (clientX - rect.left) * scaleX,
+                    y: (clientY - rect.top) * scaleY
+                };
+            };
+
+            const startDrawing = (e) => {
+                if (canvas.style.pointerEvents === 'none') return;
+                e.preventDefault(); // 터치 시 화면 스크롤 방지
+                const pos = getMousePos(e);
+                const state = canvasContexts[qId];
+                state.isDrawing = true;
+                state.ctx.beginPath();
+                state.ctx.moveTo(pos.x, pos.y);
+            };
+
+            const draw = (e) => {
+                const state = canvasContexts[qId];
+                if (!state || !state.isDrawing) return;
+                e.preventDefault();
+                const pos = getMousePos(e);
+                
+                // 화면 크기에 비례하여 선 굵기 동적 조절
+                const scaleRatio = canvas.width / img.clientWidth;
+                state.ctx.lineWidth = scaleRatio * (state.mode === 'eraser' ? 25 : 3);
+                
+                // 지우개 모드: 캔버스를 투명하게 만들어 원본 이미지를 보여줌
+                if (state.mode === 'eraser') {
+                    state.ctx.globalCompositeOperation = 'destination-out';
+                    state.ctx.strokeStyle = 'rgba(0,0,0,1)'; 
+                } else {
+                    state.ctx.globalCompositeOperation = 'source-over';
+                    state.ctx.strokeStyle = state.color;
+                }
+
+                state.ctx.lineTo(pos.x, pos.y);
+                state.ctx.stroke();
+            };
+
+            const stopDrawing = () => {
+                if (canvasContexts[qId]) canvasContexts[qId].isDrawing = false;
+            };
+
+            // 마우스 이벤트
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('mouseout', stopDrawing);
+            
+            // 터치 이벤트 (모바일/태블릿)
+            canvas.addEventListener('touchstart', startDrawing, {passive: false});
+            canvas.addEventListener('touchmove', draw, {passive: false});
+            canvas.addEventListener('touchend', stopDrawing);
+        };
+
+        window.toggleDrawMode = function(qId) {
+            const canvas = document.getElementById(`canvas-${qId}`);
+            const btn = document.getElementById(`btn-draw-${qId}`);
+            const tools = document.getElementById(`draw-tools-${qId}`);
+            
+            if (canvas.style.pointerEvents === 'none') {
+                canvas.style.pointerEvents = 'auto'; // 필기 켜기 (터치 활성화)
+                btn.innerHTML = '❌ 필기 끄기';
+                btn.classList.add('bg-blue-100', 'text-blue-700', 'border-blue-300');
+                btn.classList.remove('bg-gray-100', 'text-gray-700');
+                tools.classList.remove('hidden');
+                tools.classList.add('flex');
+            } else {
+                canvas.style.pointerEvents = 'none'; // 필기 끄기 (일반 스크롤 가능)
+                btn.innerHTML = '✏️ 필기 켜기';
+                btn.classList.remove('bg-blue-100', 'text-blue-700', 'border-blue-300');
+                btn.classList.add('bg-gray-100', 'text-gray-700');
+                tools.classList.add('hidden');
+                tools.classList.remove('flex');
+            }
+        };
+
+        window.setDrawColor = function(qId, color, btnEl) {
+            if (!canvasContexts[qId]) return;
+            canvasContexts[qId].mode = 'pen';
+            canvasContexts[qId].color = color;
+            
+            // 색상 버튼 테두리 강조 UI 업데이트
+            const buttons = document.querySelectorAll(`.color-btn-${qId}`);
+            buttons.forEach(b => b.classList.replace('ring-gray-400', 'ring-transparent'));
+            if (btnEl) btnEl.classList.replace('ring-transparent', 'ring-gray-400');
+        };
+
+        window.setDrawMode = function(qId, mode) {
+            if (!canvasContexts[qId]) return;
+            canvasContexts[qId].mode = mode;
+        };
+
+        window.clearCanvas = function(qId) {
+            const canvas = document.getElementById(`canvas-${qId}`);
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        };
 
         // Initialize the app
         initApp();
