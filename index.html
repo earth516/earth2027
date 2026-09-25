@@ -9,59 +9,109 @@
     <style>
         body {
             font-family: 'Noto Sans KR', sans-serif;
-            background-color: #f3f4f6; /* bg-gray-100 */
+            background-color: #f8fafc; /* bg-slate-50 */
         }
         .fade-in {
             animation: fadeIn 0.3s ease-in-out;
         }
         @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
+        /* Custom scrollbar for better aesthetics */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
-<body class="text-gray-800">
+<body class="text-gray-800 h-screen overflow-hidden flex bg-slate-50 relative">
 
-    <div class="min-h-screen flex flex-col md:flex-row">
-        
-        <!-- Sidebar for Navigation -->
-        <aside class="w-full md:w-64 bg-white shadow-md z-10 flex-shrink-0">
-            <div class="p-6">
-                <h1 class="text-2xl font-bold text-blue-600 mb-6 border-b pb-4">지구과학 문제은행</h1>
-                
-                <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">단원 선택</h2>
-                <nav id="chapter-nav" class="space-y-1">
-                    <!-- Chapters will be rendered here -->
-                </nav>
+    <!-- Floating Timer (Hidden by default) -->
+    <div id="timer-display" class="hidden fixed top-6 right-6 bg-gray-900 text-white px-6 py-3 rounded-2xl font-mono text-2xl shadow-2xl z-50 flex items-center gap-3 border border-gray-700">
+        <svg class="w-6 h-6 text-red-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <span id="time-left" class="font-bold tracking-wider">30:00</span>
+    </div>
+
+    <!-- Custom Alert Modal -->
+    <div id="custom-modal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white p-8 rounded-3xl shadow-2xl max-w-sm w-full text-center fade-in">
+            <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-5">
+                <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
             </div>
-        </aside>
+            <h3 id="modal-title" class="text-2xl font-bold text-gray-800 mb-2">알림</h3>
+            <p id="modal-message" class="text-gray-600 mb-8 font-medium">메시지 내용</p>
+            <button onclick="closeModal()" class="w-full px-4 py-3.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-bold text-lg shadow-sm">확인</button>
+        </div>
+    </div>
 
-        <!-- Main Content Area -->
-        <main class="flex-1 p-6 md:p-10 overflow-y-auto">
-            <header class="mb-8 flex justify-between items-center">
-                <div>
-                    <h2 id="current-chapter-title" class="text-3xl font-bold text-gray-800">단원을 선택해주세요</h2>
-                    <p id="current-chapter-desc" class="text-gray-500 mt-2">왼쪽 메뉴에서 단원을 선택하여 문제를 풀어보세요.</p>
-                </div>
-            </header>
+    <!-- Sidebar -->
+    <aside id="sidebar" class="w-72 bg-white border-r border-gray-200 z-40 flex-shrink-0 transition-all duration-300 absolute md:static h-full transform -translate-x-full md:translate-x-0 flex flex-col shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
+        <div class="p-6 flex-1 overflow-y-auto">
+            <div class="flex justify-between items-center mb-8 pb-4 border-b border-gray-100">
+                <h1 class="text-2xl font-extrabold text-blue-600 tracking-tight">지구과학 문제은행</h1>
+                <!-- Close button for mobile -->
+                <button onclick="toggleSidebar()" class="md:hidden p-2 text-gray-400 hover:text-gray-600 bg-gray-50 rounded-lg">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 px-2">단원 선택</h2>
+            <nav id="chapter-nav" class="space-y-1.5 mb-10">
+                <!-- Chapters will be rendered here -->
+            </nav>
 
+            <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 px-2">+기능</h2>
+            <nav class="space-y-1.5">
+                <button onclick="showMockExamIntro()" class="w-full text-left px-4 py-3.5 rounded-xl transition-all duration-200 font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 flex items-center justify-between border border-purple-100 hover:border-purple-200 hover:shadow-sm">
+                    <span class="flex items-center gap-2.5">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+                        모의고사 만들기
+                    </span>
+                    <svg class="w-4 h-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                </button>
+            </nav>
+        </div>
+    </aside>
+
+    <!-- Overlay for mobile sidebar -->
+    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900 bg-opacity-20 z-30 hidden backdrop-blur-sm transition-opacity"></div>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col h-full overflow-hidden w-full bg-slate-50 relative">
+        
+        <!-- Header with Toggle Button -->
+        <header class="bg-white/80 backdrop-blur-md border-b border-gray-200 z-10 px-6 py-4 flex items-center gap-4 flex-shrink-0">
+            <button onclick="toggleSidebar()" class="p-2.5 bg-white rounded-xl shadow-sm border border-gray-200 text-gray-600 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-all flex-shrink-0" title="메뉴 숨기기/보이기">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path></svg>
+            </button>
+            <div class="overflow-hidden">
+                <h2 id="current-chapter-title" class="text-xl md:text-2xl font-bold text-gray-800 truncate">단원을 선택해주세요</h2>
+                <p id="current-chapter-desc" class="text-sm text-gray-500 mt-0.5 truncate">왼쪽 메뉴에서 단원이나 기능을 선택하세요.</p>
+            </div>
+        </header>
+
+        <!-- Scrollable Content -->
+        <div class="flex-1 overflow-y-auto p-6 md:p-10" id="main-scroll-area">
+            
             <!-- Question Container -->
-            <div id="question-container" class="max-w-4xl mx-auto space-y-8 hidden">
+            <div id="question-container" class="max-w-4xl mx-auto space-y-8 hidden pb-20">
                 <!-- Questions will be injected here -->
             </div>
 
             <!-- Empty State -->
-            <div id="empty-state" class="flex flex-col items-center justify-center h-64 text-center">
-                <svg class="w-16 h-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
-                <p class="text-lg text-gray-500">학습할 단원을 선택하면 문제가 표시됩니다.</p>
+            <div id="empty-state" class="flex flex-col items-center justify-center h-full text-center fade-in pb-20">
+                <div class="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-sm border border-gray-100 mb-6">
+                    <svg class="w-12 h-12 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                </div>
+                <h3 class="text-xl font-bold text-gray-700 mb-2">학습을 시작해볼까요?</h3>
+                <p class="text-gray-500">왼쪽 메뉴에서 학습할 단원을 선택하면 문제가 표시됩니다.</p>
             </div>
-        </main>
-    </div>
+        </div>
+    </main>
 
     <script>
         // Data Structure for the Question Bank
-        // In a real scenario with GitHub Pages, you might fetch this data from a JSON file
-        // or just have it hardcoded if the dataset isn't massive.
         const db = {
             chapters: [
                 {
@@ -81,12 +131,10 @@
                 }
             ],
             questions: [
-                // 1단원 (고체 지구) 문제들
                 {
                     id: 'q1_1',
                     chapterId: 'ch1',
                     number: 1,
-                    // 실제 폴더 구조에 맞게 경로 수정 (ch1 폴더 안의 q/1번_문제.png)
                     questionImage: 'ch1/q/1번_문제.png', 
                     answerImage: 'ch1/a/1번_해설.png'
                 },
@@ -97,7 +145,6 @@
                     questionImage: 'ch1/q/2번_문제.png',
                     answerImage: 'ch1/a/2번_해설.png'
                 },
-                // 2단원 문제들 (필요한 만큼 추가)
                  {
                     id: 'q2_1',
                     chapterId: 'ch2',
@@ -114,17 +161,84 @@
         const currentChapterDesc = document.getElementById('current-chapter-desc');
         const questionContainer = document.getElementById('question-container');
         const emptyState = document.getElementById('empty-state');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebar-overlay');
+        const timerDisplay = document.getElementById('timer-display');
+        const timeLeftSpan = document.getElementById('time-left');
+        const customModal = document.getElementById('custom-modal');
+        const modalMessage = document.getElementById('modal-message');
+        const mainScrollArea = document.getElementById('main-scroll-area');
 
         let currentChapterId = null;
+        let isMockExamMode = false;
+        let timerInterval = null;
+        let timeLeft = 1800; // 30 minutes in seconds
+
+        function toggleSidebar() {
+            // Mobile toggle
+            sidebar.classList.toggle('-translate-x-full');
+            // Desktop toggle (using negative margin to collapse)
+            sidebar.classList.toggle('md:-ml-[18rem]'); // 72 * 0.25rem = 18rem
+            // Overlay visibility
+            sidebarOverlay.classList.toggle('hidden');
+        }
+
+        function showModal(message) {
+            modalMessage.innerText = message;
+            customModal.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            customModal.classList.add('hidden');
+        }
+
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const s = (seconds % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        }
+
+        function stopTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            timerDisplay.classList.add('hidden');
+            timerDisplay.classList.remove('fade-in');
+        }
+
+        function startTimer() {
+            stopTimer(); // Ensure no duplicates
+            timeLeft = 1800; // Reset to 30 mins
+            timeLeftSpan.innerText = formatTime(timeLeft);
+            timeLeftSpan.classList.remove('text-red-400');
+            timerDisplay.classList.remove('hidden');
+            timerDisplay.classList.add('fade-in');
+            
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                timeLeftSpan.innerText = formatTime(timeLeft);
+                
+                // Change color to red when 5 minutes (300s) or less remain
+                if (timeLeft <= 300) {
+                    timeLeftSpan.classList.add('text-red-400');
+                }
+                
+                if (timeLeft <= 0) {
+                    stopTimer();
+                    showModal("모의고사 제한 시간 30분이 모두 지났습니다. 수고하셨습니다!");
+                }
+            }, 1000);
+        }
 
         function renderNavigation() {
             chapterNav.innerHTML = '';
             db.chapters.forEach(chapter => {
                 const btn = document.createElement('button');
-                btn.className = `w-full text-left px-4 py-3 rounded-lg transition-colors duration-150 font-medium ${
-                    currentChapterId === chapter.id 
-                    ? 'bg-blue-50 text-blue-700' 
-                    : 'text-gray-600 hover:bg-gray-100'
+                btn.className = `w-full text-left px-4 py-3 rounded-xl transition-all duration-200 font-medium border border-transparent ${
+                    currentChapterId === chapter.id && !isMockExamMode
+                    ? 'bg-blue-50 text-blue-700 border-blue-100 shadow-sm' 
+                    : 'text-gray-600 hover:bg-gray-50 hover:border-gray-100'
                 }`;
                 btn.innerText = chapter.title;
                 btn.onclick = () => selectChapter(chapter.id);
@@ -134,7 +248,9 @@
 
         function selectChapter(chapterId) {
             currentChapterId = chapterId;
-            renderNavigation(); // Update active state
+            isMockExamMode = false;
+            stopTimer(); // Stop timer if switching back to normal chapter
+            renderNavigation(); 
 
             const chapter = db.chapters.find(c => c.id === chapterId);
             if (chapter) {
@@ -146,55 +262,116 @@
                 
                 emptyState.classList.add('hidden');
                 questionContainer.classList.remove('hidden');
+                mainScrollArea.scrollTo(0, 0);
+
+                // Auto-hide sidebar on mobile after selection
+                if(window.innerWidth < 768 && !sidebar.classList.contains('-translate-x-full')) {
+                    toggleSidebar();
+                }
             }
         }
 
-        function renderQuestions(questions) {
+        function showMockExamIntro() {
+            currentChapterId = null;
+            isMockExamMode = true;
+            stopTimer();
+            renderNavigation(); // Update active state visually
+
+            currentChapterTitle.innerText = "모의고사 만들기";
+            currentChapterDesc.innerText = "전 범위에서 무작위로 문제를 출제합니다.";
+
+            // Render Intro Screen
+            questionContainer.innerHTML = `
+                <div class="bg-white p-10 md:p-14 rounded-3xl shadow-sm border border-gray-100 text-center mt-4 md:mt-10 fade-in">
+                    <div class="w-24 h-24 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <svg class="w-12 h-12 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                    <h3 class="text-2xl md:text-3xl font-extrabold text-gray-800 mb-4 tracking-tight">준비되셨나요?</h3>
+                    <p class="text-gray-500 mb-10 max-w-md mx-auto leading-relaxed">모의고사 시작 버튼을 누르면 <strong class="text-purple-600">30분의 타이머</strong>가 작동하며 최대 20개의 문제가 무작위로 출제됩니다.</p>
+                    <button onclick="startMockExam()" class="px-8 py-4 bg-purple-600 text-white text-lg rounded-2xl hover:bg-purple-700 hover:shadow-lg transition-all font-bold flex items-center justify-center gap-3 mx-auto w-full sm:w-auto transform hover:-translate-y-1">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        모의고사 시작하기
+                    </button>
+                </div>
+            `;
+            
+            emptyState.classList.add('hidden');
+            questionContainer.classList.remove('hidden');
+
+            if(window.innerWidth < 768 && !sidebar.classList.contains('-translate-x-full')) {
+                toggleSidebar();
+            }
+        }
+
+        function startMockExam() {
+            // Get all questions and shuffle
+            const allQuestions = [...db.questions];
+            for (let i = allQuestions.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [allQuestions[i], allQuestions[j]] = [allQuestions[j], allQuestions[i]];
+            }
+
+            // Pick up to 20
+            const mockQuestions = allQuestions.slice(0, 20);
+
+            currentChapterDesc.innerText = "제한 시간 30분! 실전처럼 집중해서 풀어보세요.";
+            renderQuestions(mockQuestions, true);
+            startTimer();
+            mainScrollArea.scrollTo(0, 0);
+        }
+
+        function renderQuestions(questions, isMock = false) {
             questionContainer.innerHTML = '';
             
             if (questions.length === 0) {
                 questionContainer.innerHTML = `
-                    <div class="bg-white p-8 rounded-xl shadow-sm text-center">
-                        <p class="text-gray-500">이 단원에는 아직 등록된 문제가 없습니다.</p>
+                    <div class="bg-white p-10 rounded-2xl shadow-sm text-center border border-gray-100 fade-in">
+                        <p class="text-gray-500">등록된 문제가 없습니다.</p>
                     </div>
                 `;
                 return;
             }
 
-            questions.forEach(q => {
+            questions.forEach((q, index) => {
                 const qEl = document.createElement('div');
-                qEl.className = 'bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200 fade-in';
+                qEl.className = 'bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100 fade-in transition-shadow hover:shadow-md';
+                qEl.style.animationDelay = `${index * 0.05}s`;
                 
-                // Structure for a single question item
+                // Determine label based on mode
+                let questionLabel = isMock ? `문제 ${index + 1}` : `문제 ${q.number}`;
+                let sourceBadge = isMock 
+                    ? `<span class="px-3 py-1 bg-purple-50 text-purple-600 rounded-full text-xs font-bold border border-purple-100">${db.chapters.find(c=>c.id===q.chapterId)?.title.split(' ')[0]} 단원</span>` 
+                    : `<span class="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-bold border border-blue-100">2027 대비</span>`;
+
                 qEl.innerHTML = `
-                    <div class="p-6">
-                        <div class="flex items-center justify-between mb-4">
-                            <h3 class="text-lg font-bold text-gray-800">문제 ${q.number}</h3>
-                            <span class="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold">2027 대비</span>
+                    <div class="p-6 md:p-8">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-xl font-extrabold text-gray-800">${questionLabel}</h3>
+                            ${sourceBadge}
                         </div>
                         
                         <!-- Question Image -->
-                        <div class="mb-6 border rounded-lg p-2 bg-white">
-                            <img src="${q.questionImage}" alt="문제 ${q.number}" class="w-full h-auto rounded" onerror="this.src='https://placehold.co/800x400/fee2e2/991b1b?text=이미지+로드+실패'">
+                        <div class="mb-8 border border-gray-100 rounded-xl p-3 bg-gray-50 flex justify-center">
+                            <img src="${q.questionImage}" alt="${questionLabel}" class="max-w-full h-auto rounded-lg" onerror="this.src='https://placehold.co/800x400/f8fafc/94a3b8?text=이미지+로드+실패'">
                         </div>
 
                         <!-- Action Button -->
-                        <div class="flex justify-end">
-                            <button onclick="toggleAnswer('${q.id}')" id="btn-toggle-${q.id}" class="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium flex items-center gap-2">
+                        <div class="flex justify-end border-t border-gray-100 pt-6">
+                            <button onclick="toggleAnswer('${q.id}')" id="btn-toggle-${q.id}" class="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-semibold flex items-center gap-2 shadow-sm hover:shadow">
                                 <span>정답 및 해설 보기</span>
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                <svg class="w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                             </button>
                         </div>
                     </div>
 
                     <!-- Answer Section (Hidden by default) -->
-                    <div id="answer-${q.id}" class="hidden border-t border-gray-100 bg-gray-50 p-6">
-                        <h4 class="font-bold text-gray-700 mb-3 flex items-center gap-2">
-                            <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                            해설
+                    <div id="answer-${q.id}" class="hidden border-t-2 border-dashed border-gray-200 bg-slate-50/50 p-6 md:p-8">
+                        <h4 class="font-extrabold text-gray-700 mb-4 flex items-center gap-2 text-lg">
+                            <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            정답 및 해설
                         </h4>
-                        <div class="border rounded-lg p-2 bg-white shadow-inner">
-                            <img src="${q.answerImage}" alt="해설 ${q.number}" class="w-full h-auto rounded" onerror="this.src='https://placehold.co/800x400/fee2e2/991b1b?text=해설+이미지+로드+실패'">
+                        <div class="border border-gray-200 rounded-xl p-3 bg-white shadow-sm flex justify-center">
+                            <img src="${q.answerImage}" alt="해설" class="max-w-full h-auto rounded-lg" onerror="this.src='https://placehold.co/800x400/f8fafc/94a3b8?text=해설+이미지+로드+실패'">
                         </div>
                     </div>
                 `;
@@ -202,7 +379,6 @@
             });
         }
 
-        // Make toggle function available globally
         window.toggleAnswer = function(questionId) {
             const answerDiv = document.getElementById(`answer-${questionId}`);
             const btn = document.getElementById(`btn-toggle-${questionId}`);
@@ -210,20 +386,19 @@
             const icon = btn.querySelector('svg');
 
             if (answerDiv.classList.contains('hidden')) {
-                // Show Answer
+                // Show
                 answerDiv.classList.remove('hidden');
                 answerDiv.classList.add('fade-in');
-                btn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
-                btn.classList.add('bg-gray-600', 'hover:bg-gray-700');
+                btn.classList.replace('bg-blue-600', 'bg-gray-600');
+                btn.classList.replace('hover:bg-blue-700', 'hover:bg-gray-700');
                 span.innerText = '해설 닫기';
                 icon.style.transform = 'rotate(180deg)';
-                icon.style.transition = 'transform 0.3s';
             } else {
-                // Hide Answer
+                // Hide
                 answerDiv.classList.add('hidden');
                 answerDiv.classList.remove('fade-in');
-                btn.classList.remove('bg-gray-600', 'hover:bg-gray-700');
-                btn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                btn.classList.replace('bg-gray-600', 'bg-blue-600');
+                btn.classList.replace('hover:bg-gray-700', 'hover:bg-blue-700');
                 span.innerText = '정답 및 해설 보기';
                 icon.style.transform = 'rotate(0deg)';
             }
