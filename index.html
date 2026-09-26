@@ -1,743 +1,446 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2027 수능 지구과학 문제은행</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Noto Sans KR', sans-serif;
-            background-color: #f8fafc; /* bg-slate-50 */
-        }
-        .fade-in {
-            animation: fadeIn 0.3s ease-in-out;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        /* Custom scrollbar for better aesthetics */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+import fitz  # PyMuPDF
+import re
+import os
+import time
+import threading
+import webbrowser
+import tkinter as tk
+from tkinter import filedialog, messagebox
+from PIL import Image, ImageChops
+
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+from googleapiclient.errors import HttpError
+
+SCOPES = [
+    'https://www.googleapis.com/auth/documents', 
+    'https://www.googleapis.com/auth/drive'
+]
+
+# ---------------------------------------------------------
+# 0. 이미지 상하단 흰색 여백 자동 제거 함수
+# ---------------------------------------------------------
+def trim_white_borders(image):
+    bg = Image.new(image.mode, image.size, (255, 255, 255))
+    diff = ImageChops.difference(image, bg)
+    diff = ImageChops.add(diff, diff, 2.0, -100)
+    bbox = diff.getbbox()
+    if bbox:
+        return image.crop((0, max(0, bbox[1] - 5), image.width, min(image.height, bbox[3] + 5)))
+    return image
+
+# ---------------------------------------------------------
+# 1. 캡처 보조 함수 (단일 / 분할 영역 결합)
+# ---------------------------------------------------------
+def capture_range(doc, start_info, end_info, out_path):
+    p_start, y_s = start_info["page"], max(0, start_info["y"] - 5)
+    p_end, y_e = end_info["page"], end_info["y"] - 5
+
+    if p_start == p_end:
+        page = doc[p_start]
+        rect = fitz.Rect(0, y_s, page.rect.width, max(y_s + 20, y_e))
+        pix = page.get_pixmap(clip=rect, dpi=130)
+        pix.save(out_path)
         
-        /* 🖨️ 인쇄(PDF 저장)용 스타일 추가 */
-        @media print {
-            /* 1. 전체 화면 고정 및 스크롤 강제 해제 (여러 장 출력 짤림 방지 핵심!) */
-            html, body, main, #main-scroll-area, #question-container {
-                height: auto !important;
-                min-height: auto !important;
-                overflow: visible !important;
-                position: static !important;
-                display: block !important;
-                background: white !important;
-            /* 페이지 짤림 방지 및 스타일 제거 */
-            .print-mode .question-card {
-                page-break-inside: avoid;
-                break-inside: avoid;
-                box-shadow: none;
-                border: 1px solid #e2e8f0;
-                margin-bottom: 2rem;
-            }
-            
-            /* 불필요한 UI 숨김 */
-            .print-mode button, 
-            .print-mode #timer-display,
-            .print-mode header,
-            .print-mode aside,
-            .print-mode .mock-intro-box,
-            .print-mode .draw-toolbar {
-                display: none !important;
-            }
-            
-            /* 문제만 출력 모드 */
-            .print-q .answer-section { display: none !important; }
-            
-            /* 5. 해설만 출력 모드 */
-            .print-a .question-image-section { display: none !important; }
-            .print-a .answer-section { 
-                display: block !important; 
-                border: none !important; 
-                padding: 0 !important; 
-                background: transparent !important; 
-            }
-        }
-    </style>
-</head>
-<body class="text-gray-800 h-screen overflow-hidden flex bg-slate-50 relative">
+        im = Image.open(out_path)
+        trimmed = trim_white_borders(im)
+        trimmed.save(out_path)
 
-    <!-- Floating Timer (Hidden by default) -->
-    <div id="timer-display" class="hidden fixed top-6 right-6 bg-gray-900 text-white px-6 py-3 rounded-2xl font-mono text-2xl shadow-2xl z-50 flex items-center gap-3 border border-gray-700">
-        <svg class="w-6 h-6 text-red-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-        <span id="time-left" class="font-bold tracking-wider">30:00</span>
-    </div>
-
-    <!-- Custom Alert Modal -->
-    <div id="custom-modal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-        <div class="bg-white p-8 rounded-3xl shadow-2xl max-w-sm w-full text-center fade-in">
-            <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-5">
-                <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            </div>
-            <h3 id="modal-title" class="text-2xl font-bold text-gray-800 mb-2">알림</h3>
-            <p id="modal-message" class="text-gray-600 mb-8 font-medium">메시지 내용</p>
-            <button onclick="closeModal()" class="w-full px-4 py-3.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-bold text-lg shadow-sm">확인</button>
-        </div>
-    </div>
-
-    <!-- Sidebar -->
-    <aside id="sidebar" class="w-72 bg-white border-r border-gray-200 z-40 flex-shrink-0 transition-all duration-300 absolute md:static h-full transform -translate-x-full md:translate-x-0 flex flex-col shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
-        <div class="p-6 flex-1 overflow-y-auto">
-            <div class="flex justify-between items-center mb-8 pb-4 border-b border-gray-100">
-                <h1 class="text-2xl font-extrabold text-blue-600 tracking-tight">지구과학 문제은행</h1>
-                <!-- Close button for mobile -->
-                <button onclick="toggleSidebar()" class="md:hidden p-2 text-gray-400 hover:text-gray-600 bg-gray-50 rounded-lg">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-            </div>
-            
-            <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 px-2">단원 선택</h2>
-            <nav id="chapter-nav" class="space-y-1.5 mb-10">
-                <!-- Chapters will be rendered here -->
-            </nav>
-
-            <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 px-2">+기능</h2>
-            <nav class="space-y-1.5">
-                <button onclick="showMockExamIntro()" class="w-full text-left px-4 py-3.5 rounded-xl transition-all duration-200 font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 flex items-center justify-between border border-purple-100 hover:border-purple-200 hover:shadow-sm">
-                    <span class="flex items-center gap-2.5">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
-                        모의고사 만들기
-                    </span>
-                    <svg class="w-4 h-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-                </button>
-            </nav>
-        </div>
-    </aside>
-
-    <!-- Overlay for mobile sidebar (데스크톱에서는 안 보이게 md:hidden 추가) -->
-    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900 bg-opacity-20 z-30 hidden md:hidden backdrop-blur-sm transition-opacity"></div>
-
-    <!-- Main Content Area -->
-    <main class="flex-1 flex flex-col h-full overflow-hidden w-full bg-slate-50 relative">
+    elif p_end == p_start + 1:
+        p1 = doc[p_start]
+        p2 = doc[p_end]
         
-        <!-- Header with Toggle Button -->
-        <header class="bg-white/80 backdrop-blur-md border-b border-gray-200 z-10 px-6 py-4 flex items-center gap-4 flex-shrink-0">
-            <button onclick="toggleSidebar()" class="p-2.5 bg-white rounded-xl shadow-sm border border-gray-200 text-gray-600 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-all flex-shrink-0" title="메뉴 숨기기/보이기">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path></svg>
-            </button>
-            <div class="overflow-hidden">
-                <h2 id="current-chapter-title" class="text-xl md:text-2xl font-bold text-gray-800 truncate">단원을 선택해주세요</h2>
-                <p id="current-chapter-desc" class="text-sm text-gray-500 mt-0.5 truncate">왼쪽 메뉴에서 단원이나 기능을 선택하세요.</p>
-            </div>
-        </header>
-
-        <!-- Scrollable Content -->
-        <div class="flex-1 overflow-y-auto p-6 md:p-10" id="main-scroll-area">
-            
-            <!-- Question Container -->
-            <div id="question-container" class="max-w-4xl mx-auto space-y-8 hidden pb-20">
-                <!-- Questions will be injected here -->
-            </div>
-
-            <!-- Empty State -->
-            <div id="empty-state" class="flex flex-col items-center justify-center h-full text-center fade-in pb-20">
-                <div class="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-sm border border-gray-100 mb-6">
-                    <svg class="w-12 h-12 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
-                </div>
-                <h3 class="text-xl font-bold text-gray-700 mb-2">학습을 시작해볼까요?</h3>
-                <p class="text-gray-500">왼쪽 메뉴에서 학습할 단원을 선택하면 문제가 표시됩니다.</p>
-            </div>
-        </div>
-    </main>
-
-    <script>
-        // Data Structure for the Question Bank
-        const db = {
-            chapters: [
-                { id: 'ch1', title: '1. 지권의 변동', description: '1번 ~ 48번' },
-                { id: 'ch2', title: '2. 지구의 역사', description: '49번 ~ 102번' },
-                { id: 'ch3', title: '3. 대기와 해양의 변화', description: '103번 ~ 142번' },
-                { id: 'ch4', title: '4. 상호작용', description: '143번 ~ 206번' },
-                { id: 'ch5', title: '5. 별과 외계 행성계', description: '207번 ~ 270번' },
-                { id: 'ch6', title: '6. 외부 은하와 우주 팽창', description: '271번 ~ 끝' }
-            ],
-            questions: [] // 폴더 자동 스캔 알고리즘을 통해 자동으로 채워집니다.
-        };
-
-        // DOM Elements
-        const chapterNav = document.getElementById('chapter-nav');
-        const currentChapterTitle = document.getElementById('current-chapter-title');
-        const currentChapterDesc = document.getElementById('current-chapter-desc');
-        const questionContainer = document.getElementById('question-container');
-        const emptyState = document.getElementById('empty-state');
-        const sidebar = document.getElementById('sidebar');
-        const sidebarOverlay = document.getElementById('sidebar-overlay');
-        const timerDisplay = document.getElementById('timer-display');
-        const timeLeftSpan = document.getElementById('time-left');
-        const customModal = document.getElementById('custom-modal');
-        const modalMessage = document.getElementById('modal-message');
-        const mainScrollArea = document.getElementById('main-scroll-area');
-
-        let currentChapterId = null;
-        let isMockExamMode = false;
-        let timerInterval = null;
-        let timeLeft = 1800; // 30 minutes in seconds
-
-        function toggleSidebar() {
-            // Mobile toggle
-            sidebar.classList.toggle('-translate-x-full');
-            // Desktop toggle (using negative margin to collapse)
-            sidebar.classList.toggle('md:-ml-[18rem]'); // 72 * 0.25rem = 18rem
-            // Overlay visibility
-            sidebarOverlay.classList.toggle('hidden');
-        }
-
-        function showModal(message) {
-            modalMessage.innerText = message;
-            customModal.classList.remove('hidden');
-        }
-
-        function closeModal() {
-            customModal.classList.add('hidden');
-        }
-
-        function formatTime(seconds) {
-            const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-            const s = (seconds % 60).toString().padStart(2, '0');
-            return `${m}:${s}`;
-        }
-
-        function stopTimer() {
-            if (timerInterval) {
-                clearInterval(timerInterval);
-                timerInterval = null;
-            }
-            timerDisplay.classList.add('hidden');
-            timerDisplay.classList.remove('fade-in');
-        }
-
-        function startTimer() {
-            stopTimer(); // Ensure no duplicates
-            timeLeft = 1800; // Reset to 30 mins
-            timeLeftSpan.innerText = formatTime(timeLeft);
-            timeLeftSpan.classList.remove('text-red-400');
-            timerDisplay.classList.remove('hidden');
-            timerDisplay.classList.add('fade-in');
-            
-            timerInterval = setInterval(() => {
-                timeLeft--;
-                timeLeftSpan.innerText = formatTime(timeLeft);
-                
-                // Change color to red when 5 minutes (300s) or less remain
-                if (timeLeft <= 300) {
-                    timeLeftSpan.classList.add('text-red-400');
-                }
-                
-                if (timeLeft <= 0) {
-                    stopTimer();
-                    showModal("모의고사 제한 시간 30분이 모두 지났습니다. 수고하셨습니다!");
-                }
-            }, 1000);
-        }
-
-        // PDF 인쇄/저장 함수 추가
-        function printPDF(type) {
-            document.body.classList.add('print-mode');
-            if (type === 'q') document.body.classList.add('print-q');
-            if (type === 'a') document.body.classList.add('print-a');
-            
-            // 해설 PDF 저장 시 모든 해설창을 강제로 열어줍니다.
-            if (type === 'a') {
-                document.querySelectorAll('.answer-section').forEach(el => el.classList.remove('hidden'));
-            }
-
-            // 브라우저 기본 인쇄창 띄우기 (여기서 'PDF로 저장' 선택 가능)
-            window.print();
-            
-            // 프린트창이 닫힌 후 UI 원상복구
-            setTimeout(() => {
-                document.body.classList.remove('print-mode', 'print-q', 'print-a');
-                if (type === 'a') {
-                    document.querySelectorAll('.answer-section').forEach(el => el.classList.add('hidden'));
-                }
-            }, 1000);
-        }
-
-        function renderNavigation() {
-            chapterNav.innerHTML = '';
-            db.chapters.forEach(chapter => {
-                const btn = document.createElement('button');
-                btn.className = `w-full text-left px-4 py-3 rounded-xl transition-all duration-200 font-medium border border-transparent ${
-                    currentChapterId === chapter.id && !isMockExamMode
-                    ? 'bg-blue-50 text-blue-700 border-blue-100 shadow-sm' 
-                    : 'text-gray-600 hover:bg-gray-50 hover:border-gray-100'
-                }`;
-                btn.innerText = chapter.title;
-                btn.onclick = () => selectChapter(chapter.id);
-                chapterNav.appendChild(btn);
-            });
-        }
-
-        function selectChapter(chapterId) {
-            currentChapterId = chapterId;
-            isMockExamMode = false;
-            stopTimer(); // Stop timer if switching back to normal chapter
-            renderNavigation(); 
-
-            const chapter = db.chapters.find(c => c.id === chapterId);
-            if (chapter) {
-                currentChapterTitle.innerText = chapter.title;
-                currentChapterDesc.innerText = chapter.description;
-                
-                const chapterQuestions = db.questions.filter(q => q.chapterId === chapterId);
-                renderQuestions(chapterQuestions);
-                
-                emptyState.classList.add('hidden');
-                questionContainer.classList.remove('hidden');
-                mainScrollArea.scrollTo(0, 0);
-
-                // Auto-hide sidebar on mobile after selection
-                if(window.innerWidth < 768 && !sidebar.classList.contains('-translate-x-full')) {
-                    toggleSidebar();
-                }
-            }
-        }
-
-        function showMockExamIntro() {
-            currentChapterId = null;
-            isMockExamMode = true;
-            stopTimer();
-            renderNavigation(); // Update active state visually
-
-            currentChapterTitle.innerText = "모의고사 만들기";
-            currentChapterDesc.innerText = "출제 범위를 선택하고 실전처럼 테스트해 보세요.";
-
-            // 단원 체크박스 동적 생성
-            let checkboxesHtml = db.chapters.map(ch => `
-                <label class="flex items-center gap-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-gray-200">
-                    <input type="checkbox" value="${ch.id}" checked class="w-5 h-5 text-purple-600 rounded border-gray-300 focus:ring-purple-500 cursor-pointer">
-                    <span class="text-gray-700 font-medium text-sm md:text-base">${ch.title}</span>
-                </label>
-            `).join('');
-
-            // 모의고사 인트로 화면 렌더링 (체크박스와 PDF 버튼 포함)
-            questionContainer.innerHTML = `
-                <div class="mock-intro-box bg-white p-8 md:p-12 rounded-3xl shadow-sm border border-gray-100 text-center mt-4 md:mt-10 fade-in">
-                    <div class="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <svg class="w-10 h-10 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    </div>
-                    <h3 class="text-2xl md:text-3xl font-extrabold text-gray-800 mb-4 tracking-tight">모의고사 설정</h3>
-                    <p class="text-gray-500 mb-8 max-w-md mx-auto leading-relaxed">학습한 단원을 선택하고 모의고사를 시작하세요. 선택된 범위 내에서 무작위로 최대 20문제가 출제됩니다.</p>
-                    
-                    <!-- 출제 범위 선택 (체크박스) -->
-                    <div class="text-left max-w-2xl mx-auto mb-10 bg-slate-50 p-6 rounded-2xl border border-gray-200 shadow-inner">
-                        <h4 class="font-bold text-gray-700 mb-4 px-2 flex items-center gap-2">
-                            <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
-                            출제 범위 선택
-                        </h4>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" id="mock-chapter-checkboxes">
-                            ${checkboxesHtml}
-                        </div>
-                    </div>
-
-                    <!-- 시작 버튼 -->
-                    <button onclick="startMockExam()" class="px-8 py-4 bg-purple-600 text-white text-lg rounded-2xl hover:bg-purple-700 hover:shadow-lg transition-all font-bold flex items-center justify-center gap-3 mx-auto w-full sm:w-auto transform hover:-translate-y-1">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        모의고사 시작하기
-                    </button>
-
-                    <!-- PDF 다운로드 버튼 (시작 전에는 숨김 처리됨) -->
-                    <div id="mock-pdf-buttons" class="hidden justify-center gap-3 mt-6 fade-in flex-wrap">
-                        <button onclick="printPDF('q')" class="px-5 py-3 bg-gray-800 text-white text-sm font-bold rounded-xl shadow hover:bg-gray-700 transition-colors flex items-center gap-2">
-                            📝 문제 PDF 저장
-                        </button>
-                        <button onclick="printPDF('a')" class="px-5 py-3 bg-green-700 text-white text-sm font-bold rounded-xl shadow hover:bg-green-600 transition-colors flex items-center gap-2">
-                            💡 해설 PDF 저장
-                        </button>
-                    </div>
-                </div>
-
-                <!-- 섞인 모의고사 문제가 렌더링될 영역을 별도로 분리 -->
-                <div id="mock-questions-render-area" class="space-y-8 mt-8 pb-10"></div>
-            `;
-            
-            emptyState.classList.add('hidden');
-            questionContainer.classList.remove('hidden');
-
-            if(window.innerWidth < 768 && !sidebar.classList.contains('-translate-x-full')) {
-                toggleSidebar();
-            }
-        }
-
-        function startMockExam() {
-            // 1. 체크된 단원 확인하기
-            const checkboxes = document.querySelectorAll('#mock-chapter-checkboxes input[type="checkbox"]:checked');
-            const selectedChapterIds = Array.from(checkboxes).map(cb => cb.value);
-
-            if (selectedChapterIds.length === 0) {
-                showModal("출제할 단원을 최소 1개 이상 선택해주세요.");
-                return;
-            }
-
-            // 2. 선택된 단원의 문제만 필터링
-            const filteredQuestions = db.questions.filter(q => selectedChapterIds.includes(q.chapterId));
-
-            if (filteredQuestions.length === 0) {
-                showModal("선택한 단원에 문제가 없습니다. 폴더에 파일이 있는지 확인해주세요.");
-                return;
-            }
-
-            // 3. 문제 섞기 (최대 20개 추출)
-            const allQuestions = [...filteredQuestions];
-            for (let i = allQuestions.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [allQuestions[i], allQuestions[j]] = [allQuestions[j], allQuestions[i]];
-            }
-            const mockQuestions = allQuestions.slice(0, 20);
-
-            // 4. UI 업데이트
-            currentChapterDesc.innerText = "제한 시간 30분! 실전처럼 집중해서 풀어보세요.";
-            
-            // 모의고사가 시작되면 PDF 버튼을 표시합니다.
-            const pdfButtons = document.getElementById('mock-pdf-buttons');
-            pdfButtons.classList.remove('hidden');
-            pdfButtons.classList.add('flex');
-
-            // 5. 문제 렌더링 (대상 영역을 mock-questions-render-area로 지정)
-            renderQuestions(mockQuestions, true, 'mock-questions-render-area');
-            
-            // 타이머 시작
-            startTimer();
-            
-            // 화면을 첫 번째 문제가 있는 곳으로 부드럽게 스크롤 이동
-            setTimeout(() => {
-                document.getElementById('mock-questions-render-area').scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 100);
-        }
-
-        function renderQuestions(questions, isMock = false, targetId = 'question-container') {
-            const container = document.getElementById(targetId);
-            container.innerHTML = '';
-            
-            if (questions.length === 0) {
-                container.innerHTML = `
-                    <div class="bg-white p-10 rounded-2xl shadow-sm text-center border border-gray-100 fade-in">
-                        <p class="text-gray-500">이 단원에 등록된 문제가 없습니다. 폴더에 파일이 있는지 확인해주세요.</p>
-                    </div>
-                `;
-                return;
-            }
-
-            questions.forEach((q, index) => {
-                const qEl = document.createElement('div');
-                // 클래스에 question-card 추가
-                qEl.className = 'question-card bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100 fade-in transition-shadow hover:shadow-md';
-                qEl.style.animationDelay = `${index * 0.05}s`;
-                
-                // Determine label based on mode
-                let questionLabel = isMock ? `문제 ${index + 1}` : `문제 ${q.number}`;
-                let sourceBadge = isMock 
-                    ? `<span class="px-3 py-1 bg-purple-50 text-purple-600 rounded-full text-xs font-bold border border-purple-100">${db.chapters.find(c=>c.id===q.chapterId)?.title.split(' ')[0]} 단원</span>` 
-                    : `<span class="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-bold border border-blue-100">2027 대비</span>`;
-
-                qEl.innerHTML = `
-                    <div class="p-6 md:p-8">
-                        <div class="flex items-center justify-between mb-6">
-                            <h3 class="text-xl font-extrabold text-gray-800">${questionLabel}</h3>
-                            ${sourceBadge}
-                        </div>
-                        
-                        <!-- 필기 도구 툴바 -->
-                        <div class="draw-toolbar flex justify-end gap-2 mb-3">
-                            <div id="draw-tools-${q.id}" class="hidden items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-lg shadow-inner">
-                                <button onclick="setDrawColor('${q.id}', 'black', this)" class="w-6 h-6 rounded-full bg-black ring-2 ring-offset-1 ring-gray-400 transition-all color-btn-${q.id}"></button>
-                                <button onclick="setDrawColor('${q.id}', 'red', this)" class="w-6 h-6 rounded-full bg-red-500 ring-2 ring-offset-1 ring-transparent transition-all color-btn-${q.id}"></button>
-                                <button onclick="setDrawColor('${q.id}', 'blue', this)" class="w-6 h-6 rounded-full bg-blue-500 ring-2 ring-offset-1 ring-transparent transition-all color-btn-${q.id}"></button>
-                                <div class="w-px h-5 bg-gray-300 mx-1"></div>
-                                <button onclick="setDrawMode('${q.id}', 'eraser')" class="text-sm font-bold text-gray-600 hover:text-gray-900 px-2 py-1 rounded hover:bg-gray-200">지우개</button>
-                                <button onclick="clearCanvas('${q.id}')" class="text-sm font-bold text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50">전체지우기</button>
-                            </div>
-                            <button onclick="toggleDrawMode('${q.id}')" id="btn-draw-${q.id}" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-semibold flex items-center gap-2 text-sm border border-gray-200">
-                                ✏️ 필기 켜기
-                            </button>
-                        </div>
-
-                        <!-- Question Image with Canvas overlay (클래스 및 캔버스 추가) -->
-                        <div class="question-image-section mb-8 border border-gray-100 rounded-xl p-3 bg-gray-50 flex justify-center overflow-hidden">
-                            <div class="relative inline-block max-w-full">
-                                <img id="img-${q.id}" src="${q.questionImage}" alt="${questionLabel}" class="max-w-full h-auto rounded-lg select-none" draggable="false" onload="setupCanvas('${q.id}')" onerror="this.src='https://placehold.co/800x400/f8fafc/94a3b8?text=이미지+로드+실패'">
-                                <canvas id="canvas-${q.id}" class="absolute top-0 left-0 w-full h-full touch-none z-10 rounded-lg" style="pointer-events: none;"></canvas>
-                            </div>
-                        </div>
-
-                        <!-- Action Button -->
-                        <div class="flex justify-end border-t border-gray-100 pt-4 mt-2">
-                            <button onclick="toggleAnswer('${q.id}')" id="btn-toggle-${q.id}" class="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-all font-medium flex items-center gap-1.5 shadow-sm hover:shadow">
-                                <span>정답 및 해설 보기</span>
-                                <svg class="w-4 h-4 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Answer Section (클래스 answer-section 추가) -->
-                    <div id="answer-${q.id}" class="answer-section hidden border-t-2 border-dashed border-gray-200 bg-slate-50/50 p-6 md:p-8">
-                        <h4 class="font-extrabold text-gray-700 mb-4 flex items-center gap-2 text-lg">
-                            <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                            정답 및 해설
-                        </h4>
-                        <div class="border border-gray-200 rounded-xl p-3 bg-white shadow-sm flex justify-center">
-                            <img src="${q.answerImage}" alt="해설" class="max-w-full h-auto rounded-lg" onerror="this.src='https://placehold.co/800x400/f8fafc/94a3b8?text=해설+이미지+로드+실패'">
-                        </div>
-                    </div>
-                `;
-                container.appendChild(qEl);
-            });
-        }
-
-        window.toggleAnswer = function(questionId) {
-            const answerDiv = document.getElementById(`answer-${questionId}`);
-            const btn = document.getElementById(`btn-toggle-${questionId}`);
-            const span = btn.querySelector('span');
-            const icon = btn.querySelector('svg');
-
-            if (answerDiv.classList.contains('hidden')) {
-                // Show
-                answerDiv.classList.remove('hidden');
-                answerDiv.classList.add('fade-in');
-                btn.classList.replace('bg-blue-600', 'bg-gray-600');
-                btn.classList.replace('hover:bg-blue-700', 'hover:bg-gray-700');
-                span.innerText = '해설 닫기';
-                icon.style.transform = 'rotate(180deg)';
-            } else {
-                // Hide
-                answerDiv.classList.add('hidden');
-                answerDiv.classList.remove('fade-in');
-                btn.classList.replace('bg-gray-600', 'bg-blue-600');
-                btn.classList.replace('hover:bg-gray-700', 'hover:bg-blue-700');
-                span.innerText = '정답 및 해설 보기';
-                icon.style.transform = 'rotate(0deg)';
-            }
-        };
-
-        // ==========================================
-        // 🚀 자동 폴더 스캔 알고리즘 (이진 탐색 적용)
-        // ==========================================
+        pix1 = p1.get_pixmap(clip=fitz.Rect(0, y_s, p1.rect.width, p1.rect.height), dpi=130)
+        pix2 = p2.get_pixmap(clip=fitz.Rect(0, 0, p2.rect.width, max(20, y_e)), dpi=130)
         
-        // 특정 파일이 존재하는지 가볍게(HEAD) 찔러보는 함수
-        async function checkFileExists(url) {
-            try {
-                const response = await fetch(url, { method: 'HEAD', cache: 'no-cache' });
-                return response.ok;
-            } catch {
-                return false;
-            }
-        }
+        temp1 = out_path + "_p1.png"
+        temp2 = out_path + "_p2.png"
+        pix1.save(temp1)
+        pix2.save(temp2)
+        
+        im1 = Image.open(temp1)
+        im2 = Image.open(temp2)
+        
+        im1_trimmed = trim_white_borders(im1)
+        im2_trimmed = trim_white_borders(im2)
+        
+        gap = 15
+        new_w = max(im1_trimmed.width, im2_trimmed.width)
+        new_h = im1_trimmed.height + im2_trimmed.height + gap
+        
+        merged = Image.new('RGB', (new_w, new_h), (255, 255, 255))
+        merged.paste(im1_trimmed, (0, 0))
+        merged.paste(im2_trimmed, (0, im1_trimmed.height + gap))
+        merged.save(out_path)
+        
+        if os.path.exists(temp1): os.remove(temp1)
+        if os.path.exists(temp2): os.remove(temp2)
 
-        // 통합 'q' 폴더에서 전체 문제의 마지막 번호를 찾는 함수
-        async function findMaxQuestionCount() {
-            let low = 1;
-            let high = 1;
+# ---------------------------------------------------------
+# 2. PDF 전체 좌표 분석 (양식 자동 감지)
+# ---------------------------------------------------------
+def process_pdf(pdf_path):
+    doc = fitz.open(pdf_path)
+    base_folder = os.path.dirname(os.path.abspath(__file__))
+    temp_folder = os.path.join(base_folder, "temp_images")
+    if not os.path.exists(temp_folder):
+        os.makedirs(temp_folder)
 
-            // 1번 문제가 없으면 0개 반환
-            if (!(await checkFileExists(`q/1번_문제.png`))) {
-                return 0; 
-            }
+    q_points = []
+    code_points = []
+    a_points = []
+    h_points = []
+    choice_points = []
+    full_text = ""
 
-            // 1. 배수 탐색 (1, 2, 4, 8, 16, 32...) 으로 대략적인 한계점 찾기
-            while (await checkFileExists(`q/${high}번_문제.png`)) {
-                low = high;
-                high *= 2;
-            }
+    choice_targets = ["①", "1", "⑴"]
 
-            // 2. 이진 탐색 (업다운 게임) 으로 정확한 마지막 문제 번호 찾기
-            let maxFound = low;
-            let l = low;
-            let h = high - 1;
+    for page_num in range(len(doc)):
+        page = doc[page_num]
+        full_text += page.get_text() + "\n"
+
+        for r in page.search_for("[문제]"):
+            q_points.append({"page": page_num, "y": r.y0})
+        for r in page.search_for("#문항코드"):
+            # 표 헤더 하단(y1)에 여유를 두어 시작점으로 잡음
+            code_points.append({"page": page_num, "y": r.y1 + 15})
+        for r in page.search_for("[정답/모범답안]"):
+            a_points.append({"page": page_num, "y": r.y0})
+        for r in page.search_for("#강"):
+            h_points.append({"page": page_num, "y": r.y0})
             
-            while (l <= h) {
-                const mid = Math.floor((l + h) / 2);
-                if (await checkFileExists(`q/${mid}번_문제.png`)) {
-                    maxFound = mid; // 존재하면 더 높은 숫자 탐색
-                    l = mid + 1;
-                } else {
-                    h = mid - 1; // 존재하지 않으면 더 낮은 숫자 탐색
+        for ct in choice_targets:
+            for r in page.search_for(ct):
+                choice_points.append({"page": page_num, "y": r.y0})
+
+    # [문제] 태그가 없으면 #문항코드 위치를 문제 시작점으로 대체
+    use_code_as_start = len(q_points) < len(a_points) and len(code_points) >= len(a_points)
+    start_points = code_points if use_code_as_start else q_points
+
+    # 해설 텍스트 파싱
+    ans_exp_pattern = r"\[정답/모범답안\](.*?)\[해설\](.*?)(?=\[정답/모범답안\]|#강|$)"
+    text_matches = re.findall(ans_exp_pattern, full_text, re.DOTALL)
+
+    total_probs = min(len(start_points), len(a_points), len(text_matches))
+    problems_data = []
+
+    for idx in range(total_probs):
+        q = start_points[idx]
+        a = a_points[idx]
+        ans_text, exp_text = text_matches[idx]
+        
+        # 해설 종료 지점 (#강 표 직전)
+        h_candidates = [
+            h for h in h_points 
+            if (h["page"] > a["page"]) or (h["page"] == a["page"] and h["y"] > a["y"] + 10)
+        ]
+        if h_candidates:
+            exp_end = h_candidates[0]
+        elif idx + 1 < len(start_points):
+            exp_end = start_points[idx + 1]
+        else:
+            exp_end = {"page": len(doc) - 1, "y": doc[len(doc) - 1].rect.height}
+
+        # <보기> 조건문 판단
+        # 문제 영역의 페이지 텍스트를 일부 발췌하여 검사
+        prob_page_text = doc[q["page"]].get_text()
+        if a["page"] > q["page"]:
+            prob_page_text += doc[a["page"]].get_text()
+
+        is_bogi_type = ("<보기>" in prob_page_text or "보기" in prob_page_text) and ("있는 대로 고른 것은" in prob_page_text)
+
+        prob_nobogi_end = a
+        if is_bogi_type:
+            c_candidates = [
+                c for c in choice_points
+                if ((c["page"] > q["page"]) or (c["page"] == q["page"] and c["y"] > q["y"] + 15)) and
+                   ((c["page"] < a["page"]) or (c["page"] == a["page"] and c["y"] < a["y"] - 10))
+            ]
+            if c_candidates:
+                c_candidates.sort(key=lambda item: (item["page"], item["y"]))
+                prob_nobogi_end = c_candidates[0]
+
+        prob_img = os.path.join(temp_folder, f"prob_{idx+1}.png")
+        prob_nobogi_img = os.path.join(temp_folder, f"prob_nobogi_{idx+1}.png")
+        ans_img = os.path.join(temp_folder, f"ans_{idx+1}.png")
+        both_img = os.path.join(temp_folder, f"both_{idx+1}.png")
+
+        try:
+            capture_range(doc, q, a, prob_img)
+            capture_range(doc, q, prob_nobogi_end, prob_nobogi_img)
+            capture_range(doc, a, exp_end, ans_img)
+            capture_range(doc, q, exp_end, both_img)
+
+            problems_data.append({
+                "index": idx + 1,
+                "prob_img": prob_img,
+                "prob_nobogi_img": prob_nobogi_img,
+                "ans_img": ans_img,
+                "both_img": both_img,
+                "answer": ans_text.strip(),
+                "explanation": exp_text.strip()
+            })
+        except Exception:
+            continue
+
+    return problems_data
+
+# ---------------------------------------------------------
+# 3. 구글 드라이브 & 문서 API 통신
+# ---------------------------------------------------------
+def create_drive_folder(drive_service, folder_name):
+    folder_metadata = {'name': folder_name, 'mimeType': 'application/vnd.google-apps.folder'}
+    folder = drive_service.files().create(body=folder_metadata, fields='id').execute()
+    return folder.get('id')
+
+def safe_drive_upload(drive_service, file_path, folder_id, max_retries=4):
+    file_metadata = {'name': os.path.basename(file_path), 'parents': [folder_id]}
+    media = MediaFileUpload(file_path, mimetype='image/png')
+    
+    for attempt in range(max_retries):
+        try:
+            uploaded_file = drive_service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+            file_id = uploaded_file.get('id')
+            drive_service.permissions().create(fileId=file_id, body={'type': 'anyone', 'role': 'reader'}).execute()
+            time.sleep(0.3)
+            return f"https://drive.google.com/uc?id={file_id}"
+        except HttpError as err:
+            if err.resp.status in [500, 502, 503, 504]:
+                time.sleep(2 * (attempt + 1))
+            else:
+                raise err
+        except Exception:
+            time.sleep(2)
+            
+    raise Exception(f"{os.path.basename(file_path)} 업로드 실패")
+
+def write_to_google_docs(problems_data, credentials_json, status_label, doc_mode):
+    creds = None
+    token_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'token.json')
+    
+    if os.path.exists(token_path):
+        creds = Credentials.from_authorized_user_file(token_path, SCOPES)
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(credentials_json, SCOPES)
+            creds = flow.run_local_server(port=0)
+        with open(token_path, 'w') as token:
+            token.write(creds.to_json())
+
+    drive_service = build('drive', 'v3', credentials=creds)
+    docs_service = build('docs', 'v1', credentials=creds)
+
+    if doc_mode == "prob_only":
+        title_name, folder_name = "EBS 과학 [문제만]", "EBS_문제만_DOCS"
+    elif doc_mode == "ans_only":
+        title_name, folder_name = "EBS 과학 [해설만]", "EBS_해설만_DOCS"
+    else:
+        title_name, folder_name = "EBS 과학 [문제+해설]", "EBS_통합_DOCS"
+
+    status_label.config(text="드라이브 폴더 생성 중...")
+    folder_id = create_drive_folder(drive_service, folder_name=folder_name)
+
+    doc = docs_service.documents().create(body={'title': title_name}).execute()
+    document_id = doc.get('documentId')
+
+    drive_service.files().update(fileId=document_id, addParents=folder_id, fields='id, parents').execute()
+
+    requests = []
+    total = len(problems_data)
+
+    if doc_mode == "ans_only":
+        ans_exp_full_text = "========================================\n       [ 정답 및 해설 ]\n========================================\n\n"
+        for p_data in problems_data:
+            ans_exp_full_text += (
+                f"[{p_data['index']}번 문항]\n"
+                f"▶ 정답: {p_data['answer']}\n"
+                f"▶ 해설:\n{p_data['explanation']}\n"
+                f"----------------------------------------\n\n"
+            )
+        requests.append({'insertText': {'location': {'index': 1}, 'text': ans_exp_full_text}})
+
+    elif doc_mode == "both":
+        ans_exp_full_text = "========================================\n       [ 정답 및 해설편 ]\n========================================\n\n"
+        for p_data in problems_data:
+            ans_exp_full_text += (
+                f"[{p_data['index']}번 문항]\n"
+                f"▶ 정답: {p_data['answer']}\n"
+                f"▶ 해설:\n{p_data['explanation']}\n"
+                f"----------------------------------------\n\n"
+            )
+        requests.append({'insertText': {'location': {'index': 1}, 'text': ans_exp_full_text}})
+        requests.append({'insertPageBreak': {'location': {'index': 1}}})
+
+        for i, p_data in enumerate(reversed(problems_data)):
+            problem_num = total - i
+            status_label.config(text=f"문제 업로드 중... ({i+1}/{total})")
+            img_url = safe_drive_upload(drive_service, p_data["prob_img"], folder_id=folder_id)
+
+            if i < total - 1:
+                requests.append({'insertPageBreak': {'location': {'index': 1}}})
+
+            requests.append({
+                'insertInlineImage': {
+                    'location': {'index': 1},
+                    'uri': img_url,
+                    'objectSize': {'width': {'magnitude': 450, 'unit': 'PT'}}
                 }
-            }
-            return maxFound;
-        }
+            })
+            requests.append({'insertText': {'location': {'index': 1}, 'text': f"[{problem_num}번 문항]\n\n"}})
 
-        // 문제 번호에 따라 단원 ID를 자동 할당해 주는 함수
-        function getChapterId(num) {
-            if (num >= 1 && num <= 48) return 'ch1';
-            if (num >= 49 && num <= 102) return 'ch2';
-            if (num >= 103 && num <= 142) return 'ch3';
-            if (num >= 143 && num <= 206) return 'ch4';
-            if (num >= 207 && num <= 270) return 'ch5';
-            return 'ch6'; // 271 이상은 모두 마지막 단원으로 배정
-        }
+    elif doc_mode == "prob_only":
+        for i, p_data in enumerate(reversed(problems_data)):
+            problem_num = total - i
+            status_label.config(text=f"문제 업로드 중... ({i+1}/{total})")
+            img_url = safe_drive_upload(drive_service, p_data["prob_img"], folder_id=folder_id)
 
-        // 앱 초기화 및 자동 스캔 실행
-        async function initApp() {
-            showModal("문제를 스캔중입니다.");
-            
-            // 1. 단일 q 폴더에서 마지막 문제 번호 스캔
-            const maxNum = await findMaxQuestionCount();
-            
-            // 2. 1번부터 최대 번호까지 루프 돌면서 카테고리 자동 분류
-            for (let i = 1; i <= maxNum; i++) {
-                const chapterId = getChapterId(i);
-                db.questions.push({
-                    id: `q_${i}`,
-                    chapterId: chapterId,
-                    number: i,
-                    questionImage: `q/${i}번_문제.png`, // 통일된 경로 적용
-                    answerImage: `a/${i}번_해설.png`    // 통일된 경로 적용
-                });
-            }
+            if i < total - 1:
+                requests.append({'insertPageBreak': {'location': {'index': 1}}})
 
-            closeModal(); // 로딩 알림창 닫기
-            renderNavigation(); // 완료 후 좌측 메뉴 그리기
-        }
-
-        const canvasContexts = {};
-
-        window.setupCanvas = function(qId) {
-            const img = document.getElementById(`img-${qId}`);
-            const canvas = document.getElementById(`canvas-${qId}`);
-            if (!img || !canvas) return;
-
-            // 원본 이미지 해상도에 맞춰 캔버스 크기 설정 (선 화질 깨짐 방지)
-            canvas.width = img.naturalWidth || 800;
-            canvas.height = img.naturalHeight || 400;
-
-            const ctx = canvas.getContext('2d');
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            
-            canvasContexts[qId] = {
-                ctx: ctx,
-                isDrawing: false,
-                color: 'black',
-                mode: 'pen'
-            };
-
-            // 마우스/터치 좌표를 캔버스 해상도에 맞게 변환
-            const getMousePos = (e) => {
-                const rect = canvas.getBoundingClientRect();
-                const scaleX = canvas.width / rect.width;
-                const scaleY = canvas.height / rect.height;
-                let clientX = e.clientX;
-                let clientY = e.clientY;
-                
-                if (e.touches && e.touches.length > 0) {
-                    clientX = e.touches[0].clientX;
-                    clientY = e.touches[0].clientY;
+            requests.append({
+                'insertInlineImage': {
+                    'location': {'index': 1},
+                    'uri': img_url,
+                    'objectSize': {'width': {'magnitude': 450, 'unit': 'PT'}}
                 }
-                
-                return {
-                    x: (clientX - rect.left) * scaleX,
-                    y: (clientY - rect.top) * scaleY
-                };
-            };
+            })
+            requests.append({'insertText': {'location': {'index': 1}, 'text': f"[{problem_num}번 문항]\n\n"}})
 
-            const startDrawing = (e) => {
-                if (canvas.style.pointerEvents === 'none') return;
-                e.preventDefault(); // 터치 시 화면 스크롤 방지
-                const pos = getMousePos(e);
-                const state = canvasContexts[qId];
-                state.isDrawing = true;
-                state.ctx.beginPath();
-                state.ctx.moveTo(pos.x, pos.y);
-            };
+    status_label.config(text="문서에 서식을 적용하는 중입니다...")
+    docs_service.documents().batchUpdate(documentId=document_id, body={'requests': requests}).execute()
+    return document_id
 
-            const draw = (e) => {
-                const state = canvasContexts[qId];
-                if (!state || !state.isDrawing) return;
-                e.preventDefault();
-                const pos = getMousePos(e);
-                
-                // 화면 크기에 비례하여 선 굵기 동적 조절
-                const scaleRatio = canvas.width / img.clientWidth;
-                state.ctx.lineWidth = scaleRatio * (state.mode === 'eraser' ? 25 : 3);
-                
-                // 지우개 모드: 캔버스를 투명하게 만들어 원본 이미지를 보여줌
-                if (state.mode === 'eraser') {
-                    state.ctx.globalCompositeOperation = 'destination-out';
-                    state.ctx.strokeStyle = 'rgba(0,0,0,1)'; 
-                } else {
-                    state.ctx.globalCompositeOperation = 'source-over';
-                    state.ctx.strokeStyle = state.color;
-                }
+# ---------------------------------------------------------
+# 4. 로컬 이미지 폴더 저장
+# ---------------------------------------------------------
+def save_images_to_folder(problems_data, pdf_path, img_mode, status_label):
+    base_name = os.path.splitext(os.path.basename(pdf_path))[0]
+    folder_map = {
+        "prob_img": f"{base_name}_문제만_그림",
+        "prob_nobogi": f"{base_name}_문제(선택지제외)_그림",
+        "ans_img": f"{base_name}_해설만_그림",
+        "both_img": f"{base_name}_문제해설_그림"
+    }
+    save_folder = os.path.join(os.path.dirname(pdf_path), folder_map[img_mode])
+    if not os.path.exists(save_folder):
+        os.makedirs(save_folder)
 
-                state.ctx.lineTo(pos.x, pos.y);
-                state.ctx.stroke();
-            };
-
-            const stopDrawing = () => {
-                if (canvasContexts[qId]) canvasContexts[qId].isDrawing = false;
-            };
-
-            // 마우스 이벤트
-            canvas.addEventListener('mousedown', startDrawing);
-            canvas.addEventListener('mousemove', draw);
-            canvas.addEventListener('mouseup', stopDrawing);
-            canvas.addEventListener('mouseout', stopDrawing);
+    for p in problems_data:
+        idx = p["index"]
+        if img_mode == "prob_img":
+            src = p["prob_img"]
+            dst = os.path.join(save_folder, f"{idx}번_문제.png")
+        elif img_mode == "prob_nobogi":
+            src = p["prob_nobogi_img"]
+            dst = os.path.join(save_folder, f"{idx}번_문제(보기제외).png")
+        elif img_mode == "ans_img":
+            src = p["ans_img"]
+            dst = os.path.join(save_folder, f"{idx}번_해설.png")
+        else:
+            src = p["both_img"]
+            dst = os.path.join(save_folder, f"{idx}번_문제및해설.png")
             
-            // 터치 이벤트 (모바일/태블릿)
-            canvas.addEventListener('touchstart', startDrawing, {passive: false});
-            canvas.addEventListener('touchmove', draw, {passive: false});
-            canvas.addEventListener('touchend', stopDrawing);
-        };
+        Image.open(src).save(dst)
 
-        window.toggleDrawMode = function(qId) {
-            const canvas = document.getElementById(`canvas-${qId}`);
-            const btn = document.getElementById(`btn-draw-${qId}`);
-            const tools = document.getElementById(`draw-tools-${qId}`);
-            
-            if (canvas.style.pointerEvents === 'none') {
-                canvas.style.pointerEvents = 'auto'; // 필기 켜기 (터치 활성화)
-                btn.innerHTML = '❌ 필기 끄기';
-                btn.classList.add('bg-blue-100', 'text-blue-700', 'border-blue-300');
-                btn.classList.remove('bg-gray-100', 'text-gray-700');
-                tools.classList.remove('hidden');
-                tools.classList.add('flex');
-            } else {
-                canvas.style.pointerEvents = 'none'; // 필기 끄기 (일반 스크롤 가능)
-                btn.innerHTML = '✏️ 필기 켜기';
-                btn.classList.remove('bg-blue-100', 'text-blue-700', 'border-blue-300');
-                btn.classList.add('bg-gray-100', 'text-gray-700');
-                tools.classList.add('hidden');
-                tools.classList.remove('flex');
-            }
-        };
+    return save_folder
 
-        window.setDrawColor = function(qId, color, btnEl) {
-            if (!canvasContexts[qId]) return;
-            canvasContexts[qId].mode = 'pen';
-            canvasContexts[qId].color = color;
-            
-            // 색상 버튼 테두리 강조 UI 업데이트
-            const buttons = document.querySelectorAll(`.color-btn-${qId}`);
-            buttons.forEach(b => b.classList.replace('ring-gray-400', 'ring-transparent'));
-            if (btnEl) btnEl.classList.replace('ring-transparent', 'ring-gray-400');
-        };
+# ---------------------------------------------------------
+# 5. 작업 스레드
+# ---------------------------------------------------------
+def run_task(pdf_path, action_type, status_label, buttons):
+    try:
+        for b in buttons:
+            b.config(state="disabled")
 
-        window.setDrawMode = function(qId, mode) {
-            if (!canvasContexts[qId]) return;
-            canvasContexts[qId].mode = mode;
-        };
+        status_label.config(text="PDF 양식 분석 및 캡처 중...")
+        problems_data = process_pdf(pdf_path)
+        
+        if not problems_data:
+            messagebox.showwarning("결과", "문항을 감지하지 못했습니다.")
+            status_label.config(text="대기 중...")
+            return
 
-        window.clearCanvas = function(qId) {
-            const canvas = document.getElementById(`canvas-${qId}`);
-            if (!canvas) return;
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-        };
+        if action_type in ["prob_only", "ans_only", "both"]:
+            cred_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'credentials.json')
+            doc_id = write_to_google_docs(problems_data, cred_file, status_label, action_type)
+            status_label.config(text="작업 완료!")
+            messagebox.showinfo("성공", "구글 문서 생성이 완료되었습니다!")
+            webbrowser.open(f"https://docs.google.com/document/d/{doc_id}")
+        else:
+            status_label.config(text="로컬 이미지 정리 중...")
+            out_folder = save_images_to_folder(problems_data, pdf_path, action_type, status_label)
+            status_label.config(text="저장 완료!")
+            messagebox.showinfo("성공", f"이미지가 성공적으로 저장되었습니다!\n경로: {out_folder}")
+            os.startfile(out_folder)
 
-        // Initialize the app
-        initApp();
-    </script>
-</body>
-</html>
+    except Exception as e:
+        messagebox.showerror("에러", f"오류 발생:\n{str(e)}")
+        status_label.config(text="오류 발생")
+    finally:
+        for b in buttons:
+            b.config(state="normal")
+
+def handle_click(action_type, status_label, buttons):
+    file_path = filedialog.askopenfilename(
+        title="PDF 파일을 선택하세요",
+        filetypes=[("PDF Files", "*.pdf")]
+    )
+    if file_path:
+        threading.Thread(target=run_task, args=(file_path, action_type, status_label, buttons)).start()
+
+# ---------------------------------------------------------
+# 6. UI 화면
+# ---------------------------------------------------------
+root = tk.Tk()
+root.title("EBS 과학 통합 추출기")
+root.geometry("540x390")
+root.eval('tk::PlaceWindow . center')
+
+tk.Label(root, text="원하는 출력 형식을 선택하세요", font=("Helvetica", 14, "bold")).pack(pady=10)
+status_lbl = tk.Label(root, text="대기 중... 원하는 작업 버튼을 클릭하세요.", fg="blue")
+status_lbl.pack(pady=3)
+
+buttons = []
+
+frame_docs = tk.LabelFrame(root, text=" Google Docs 문서 자동 생성 ", font=("Helvetica", 10, "bold"), padx=10, pady=6)
+frame_docs.pack(fill="x", padx=15, pady=4)
+
+btn_d1 = tk.Button(frame_docs, text="📄 문제만 doc", width=14, height=2,
+                   command=lambda: handle_click("prob_only", status_lbl, buttons))
+btn_d1.grid(row=0, column=0, padx=4)
+
+btn_d2 = tk.Button(frame_docs, text="📝 해설만 doc", width=14, height=2,
+                   command=lambda: handle_click("ans_only", status_lbl, buttons))
+btn_d2.grid(row=0, column=1, padx=4)
+
+btn_d3 = tk.Button(frame_docs, text="📚 문제+해설 doc", width=16, height=2, bg="#e8f0fe",
+                   command=lambda: handle_click("both", status_lbl, buttons))
+btn_d3.grid(row=0, column=2, padx=4)
+
+frame_imgs = tk.LabelFrame(root, text=" 컴퓨터 폴더에 그림(PNG)으로 저장 ", font=("Helvetica", 10, "bold"), padx=10, pady=6)
+frame_imgs.pack(fill="x", padx=15, pady=4)
+
+btn_i1 = tk.Button(frame_imgs, text="🖼️ 문제만 그림", width=14, height=2,
+                   command=lambda: handle_click("prob_img", status_lbl, buttons))
+btn_i1.grid(row=0, column=0, padx=4, pady=3)
+
+btn_i_nobogi = tk.Button(frame_imgs, text="✂️ 문제(선택지제외)", width=14, height=2, bg="#e6ffed",
+                         command=lambda: handle_click("prob_nobogi", status_lbl, buttons))
+btn_i_nobogi.grid(row=0, column=1, padx=4, pady=3)
+
+btn_i2 = tk.Button(frame_imgs, text="🖼️ 해설만 그림", width=16, height=2,
+                   command=lambda: handle_click("ans_img", status_lbl, buttons))
+btn_i2.grid(row=0, column=2, padx=4, pady=3)
+
+btn_i3 = tk.Button(frame_imgs, text="🖼️ 문제+해설 그림", width=48, height=2, bg="#fef7e0",
+                   command=lambda: handle_click("both_img", status_lbl, buttons))
+btn_i3.grid(row=1, column=0, columnspan=3, padx=4, pady=3)
+
+buttons.extend([btn_d1, btn_d2, btn_d3, btn_i1, btn_i_nobogi, btn_i2, btn_i3])
+
+root.mainloop()
