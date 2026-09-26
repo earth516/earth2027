@@ -473,10 +473,10 @@
                         </div>
 
                         <!-- Action Button -->
-                        <div class="flex justify-end border-t border-gray-100 pt-6">
-                            <button onclick="toggleAnswer('${q.id}')" id="btn-toggle-${q.id}" class="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-semibold flex items-center gap-2 shadow-sm hover:shadow">
+                        <div class="flex justify-end border-t border-gray-100 pt-4 mt-2">
+                            <button onclick="toggleAnswer('${q.id}')" id="btn-toggle-${q.id}" class="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-all font-medium flex items-center gap-1.5 shadow-sm hover:shadow">
                                 <span>정답 및 해설 보기</span>
-                                <svg class="w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                <svg class="w-4 h-4 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                             </button>
                         </div>
                     </div>
@@ -580,7 +580,7 @@
 
         // 앱 초기화 및 자동 스캔 실행
         async function initApp() {
-            showModal("폴더에서 문제 데이터를 자동으로 스캔 중입니다...\n잠시만 기다려주세요.");
+            showModal("문제를 스캔중입니다.");
             
             // 1. 단일 q 폴더에서 마지막 문제 번호 스캔
             const maxNum = await findMaxQuestionCount();
