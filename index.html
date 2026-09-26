@@ -23,9 +23,10 @@
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         
-        /* 🖨️ 인쇄(PDF 저장)용 스타일 */
+        /* 🖨️ 인쇄(PDF 저장)용 최적화 스타일 */
         @media print {
-            html, body, main, #main-scroll-area, #question-container {
+            /* 브라우저 기본 스크롤과 높이 제한 해제 */
+            html, body, main, #main-scroll-area {
                 height: auto !important;
                 min-height: auto !important;
                 overflow: visible !important;
@@ -33,22 +34,29 @@
                 display: block !important;
                 background: white !important;
             }
-            .print-mode .question-card {
-                page-break-inside: avoid;
-                break-inside: avoid;
-                box-shadow: none;
-                border: 1px solid #e2e8f0;
-                margin-bottom: 2rem;
+            /* 문제 카드가 페이지 중간에 잘리지 않도록 보호 */
+            .question-card {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                box-shadow: none !important;
+                border: 1px solid #e2e8f0 !important;
+                margin-bottom: 2rem !important;
+                padding-bottom: 1rem !important;
             }
-            .print-mode button, 
-            .print-mode #timer-display,
-            .print-mode header,
-            .print-mode aside,
-            .print-mode .mock-intro-box,
-            .print-mode .draw-toolbar {
+            /* 인쇄 시 불필요한 UI 숨김 */
+            button, 
+            #timer-display,
+            header,
+            aside,
+            #sidebar-overlay,
+            .mock-intro-box,
+            .draw-toolbar,
+            .print\:hidden {
                 display: none !important;
             }
+            /* 문제 PDF 인쇄 시 해설 숨김 */
             .print-q .answer-section { display: none !important; }
+            /* 해설 PDF 인쇄 시 문제 숨기고 해설만 표시 */
             .print-a .question-image-section { display: none !important; }
             .print-a .answer-section { 
                 display: block !important; 
@@ -78,7 +86,7 @@
     </div>
 
     <!-- Sidebar -->
-    <aside id="sidebar" class="w-72 bg-white border-r border-gray-200 z-40 flex-shrink-0 transition-all duration-300 absolute md:static h-full transform -translate-x-full md:translate-x-0 flex flex-col shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
+    <aside id="sidebar" class="w-72 bg-white border-r border-gray-200 z-40 flex-shrink-0 transition-transform duration-300 absolute md:static h-full transform -translate-x-full md:translate-x-0 flex flex-col shadow-[4px_0_24px_rgba(0,0,0,0.02)] hidden md:flex">
         <div class="p-6 flex-1 overflow-y-auto">
             <div class="flex justify-between items-center mb-6 pb-4 border-b border-gray-100">
                 <h1 class="text-2xl font-extrabold text-blue-600 tracking-tight">지구과학 문제은행</h1>
@@ -91,7 +99,7 @@
             <div class="mb-8">
                 <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 px-2">교재 선택</h2>
                 <select id="book-selector" onchange="changeBook(this.value)" class="w-full p-2.5 border border-gray-200 rounded-xl bg-gray-50 text-gray-700 font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow outline-none cursor-pointer shadow-sm">
-                    <option value="main">📘 2027 수능 대비 (기본)</option>
+                    <option value="main">📘 2027 수능특강</option>
                     <option value="suwan">📙 2027 수능완성</option>
                 </select>
             </div>
@@ -116,7 +124,7 @@
     <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900 bg-opacity-20 z-30 hidden md:hidden backdrop-blur-sm transition-opacity"></div>
 
     <!-- Main Content Area -->
-    <main class="flex-1 flex flex-col h-full overflow-hidden w-full bg-slate-50 relative">
+    <main class="flex-1 flex flex-col h-full w-full bg-slate-50 relative">
         <header class="bg-white/80 backdrop-blur-md border-b border-gray-200 z-10 px-6 py-4 flex items-center gap-4 flex-shrink-0">
             <button onclick="toggleSidebar()" class="p-2.5 bg-white rounded-xl shadow-sm border border-gray-200 text-gray-600 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-all flex-shrink-0" title="메뉴 숨기기/보이기">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path></svg>
@@ -127,8 +135,9 @@
             </div>
         </header>
 
-        <div class="flex-1 overflow-y-auto p-6 md:p-10" id="main-scroll-area">
-            <div id="question-container" class="max-w-4xl mx-auto space-y-8 hidden pb-20"></div>
+        <div class="flex-1 overflow-y-auto p-4 md:p-10" id="main-scroll-area">
+            <div id="question-container" class="max-w-4xl mx-auto hidden pb-20"></div>
+            
             <div id="empty-state" class="flex flex-col items-center justify-center h-full text-center fade-in pb-20">
                 <div class="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-sm border border-gray-100 mb-6">
                     <svg class="w-12 h-12 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
@@ -153,10 +162,10 @@
         // 📚 교재(Book) 설정 객체
         const booksConfig = {
             main: {
-                title: "2027 수능 대비 (기본)",
-                qDir: "main_q",
-                aDir: "main_a",
-                // 기존 수능 대비 분류 기준
+                title: "2027 수능특강",
+                shortTitle: "수능특강",
+                qDir: "q",
+                aDir: "a",
                 getChapterId: function(num) {
                     if (num >= 1 && num <= 48) return 'ch1';
                     if (num >= 49 && num <= 102) return 'ch2';
@@ -168,11 +177,11 @@
             },
             suwan: {
                 title: "2027 수능완성",
+                shortTitle: "수능완성",
                 qDir: "suwan_q",
                 aDir: "suwan_a",
-                // ⚠️ 중요: 수능완성의 단원별 문항 번호 기준을 선생님께서 직접 수정해 주세요!
-                // (현재는 임시로 20문제씩 끊어두었습니다. 실제 파일 번호에 맞게 변경하시면 됩니다.)
                 getChapterId: function(num) {
+                    // TODO: 수능완성의 실제 단원 문항 번호에 맞게 수정 필요!
                     if (num >= 1 && num <= 20) return 'ch1';
                     if (num >= 21 && num <= 40) return 'ch2';
                     if (num >= 41 && num <= 60) return 'ch3';
@@ -204,17 +213,28 @@
         const modalMessage = document.getElementById('modal-message');
         const mainScrollArea = document.getElementById('main-scroll-area');
 
-        let currentBookId = 'main'; // 초기 로딩 교재
+        let currentBookId = 'main'; 
         let currentChapterId = null;
         let isMockExamMode = false;
         let timerInterval = null;
         let timeLeft = 1800;
         let isScanning = false;
 
+        // 페이징 및 정렬 관련 변수
+        let chapterQuestions = [];
+        let currentPage = 1;
+        const itemsPerPage = 5;
+        let isRandomMode = false;
+
         function toggleSidebar() {
-            sidebar.classList.toggle('-translate-x-full');
-            sidebar.classList.toggle('md:-ml-[18rem]'); 
-            sidebarOverlay.classList.toggle('hidden');
+            if (window.innerWidth < 768) {
+                sidebar.classList.toggle('hidden');
+                sidebar.classList.toggle('-translate-x-full');
+                sidebarOverlay.classList.toggle('hidden');
+            } else {
+                sidebar.classList.toggle('md:hidden');
+                sidebar.classList.toggle('hidden');
+            }
         }
 
         function showModal(message) {
@@ -302,27 +322,91 @@
             const chapter = chaptersInfo.find(c => c.id === chapterId);
             if (chapter) {
                 currentChapterTitle.innerText = chapter.title;
-                // 해당 교재, 해당 단원의 문제 필터링
-                const chapterQuestions = db.questions[currentBookId].filter(q => q.chapterId === chapterId);
                 
-                // 단원 설명 동적 업데이트 (예: 1번~48번)
-                if(chapterQuestions.length > 0) {
-                    const minNum = chapterQuestions[0].number;
-                    const maxNum = chapterQuestions[chapterQuestions.length - 1].number;
-                    currentChapterDesc.innerText = `${minNum}번 ~ ${maxNum}번 (총 ${chapterQuestions.length}문제)`;
+                // 해당 교재, 단원 문제 필터링
+                const filtered = db.questions[currentBookId].filter(q => q.chapterId === chapterId);
+                
+                if(filtered.length > 0) {
+                    currentChapterDesc.innerText = `총 ${filtered.length}문제 (한 페이지에 5문제씩 보기)`;
                 } else {
                     currentChapterDesc.innerText = "이 단원에는 등록된 문제가 없습니다.";
                 }
                 
-                renderQuestions(chapterQuestions);
+                // 데이터 세팅 후 초기 페이지 렌더링
+                chapterQuestions = [...filtered];
+                currentPage = 1;
+                isRandomMode = false; // 기본은 순서대로
+                
                 emptyState.classList.add('hidden');
                 questionContainer.classList.remove('hidden');
-                mainScrollArea.scrollTo(0, 0);
+                
+                applySortAndRender();
 
                 if(window.innerWidth < 768 && !sidebar.classList.contains('-translate-x-full')) toggleSidebar();
             }
         }
 
+        // --- 정렬 및 페이징 로직 ---
+        window.setSortMode = function(mode) {
+            isRandomMode = (mode === 'random');
+            currentPage = 1;
+            applySortAndRender();
+        };
+
+        function applySortAndRender() {
+            if (isRandomMode) {
+                // 피셔-예이츠 셔플로 랜덤하게 섞기
+                for (let i = chapterQuestions.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [chapterQuestions[i], chapterQuestions[j]] = [chapterQuestions[j], chapterQuestions[i]];
+                }
+            } else {
+                // 오름차순(순서대로) 정렬
+                chapterQuestions.sort((a, b) => a.number - b.number);
+            }
+            renderChapterPage();
+        }
+
+        window.changePage = function(delta) {
+            const totalPages = Math.ceil(chapterQuestions.length / itemsPerPage);
+            currentPage += delta;
+            if (currentPage < 1) currentPage = 1;
+            if (currentPage > totalPages) currentPage = totalPages;
+            
+            renderChapterPage();
+            mainScrollArea.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        function renderChapterPage() {
+            const totalPages = Math.ceil(chapterQuestions.length / itemsPerPage);
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+            const pageQuestions = chapterQuestions.slice(startIndex, endIndex);
+
+            let headerHtml = `
+                <div class="flex flex-col sm:flex-row justify-between items-center bg-white p-3 rounded-2xl shadow-sm border border-gray-100 mb-6 gap-4 print:hidden">
+                    <div class="flex bg-gray-100 p-1 rounded-xl w-full sm:w-auto">
+                        <button onclick="setSortMode('seq')" class="flex-1 sm:w-24 px-4 py-2 text-sm font-bold rounded-lg transition-colors ${!isRandomMode ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}">순서대로</button>
+                        <button onclick="setSortMode('random')" class="flex-1 sm:w-24 px-4 py-2 text-sm font-bold rounded-lg transition-colors ${isRandomMode ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}">랜덤으로</button>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <button onclick="changePage(-1)" class="p-2 rounded-lg bg-gray-50 hover:bg-gray-100 disabled:opacity-50 transition-colors" ${currentPage === 1 || totalPages === 0 ? 'disabled' : ''}>
+                            <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                        </button>
+                        <span class="text-sm font-bold text-gray-700">${currentPage} <span class="text-gray-400 font-normal">/ ${totalPages || 1}</span></span>
+                        <button onclick="changePage(1)" class="p-2 rounded-lg bg-gray-50 hover:bg-gray-100 disabled:opacity-50 transition-colors" ${currentPage === totalPages || totalPages === 0 ? 'disabled' : ''}>
+                            <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                        </button>
+                    </div>
+                </div>
+                <div id="chapter-questions-render-area" class="space-y-8 pb-10"></div>
+            `;
+            
+            questionContainer.innerHTML = headerHtml;
+            renderQuestions(pageQuestions, false, 'chapter-questions-render-area');
+        }
+
+        // --- 모의고사 로직 ---
         function showMockExamIntro() {
             currentChapterId = null;
             isMockExamMode = true;
@@ -330,11 +414,22 @@
             renderNavigation(); 
 
             currentChapterTitle.innerText = "모의고사 만들기";
-            currentChapterDesc.innerText = "출제 범위를 선택하고 실전처럼 테스트해 보세요.";
+            currentChapterDesc.innerText = "출제 범위와 교재를 선택하고 실전처럼 테스트해 보세요.";
 
-            let checkboxesHtml = chaptersInfo.map(ch => `
+            let bookCheckboxesHtml = `
                 <label class="flex items-center gap-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-gray-200">
-                    <input type="checkbox" value="${ch.id}" checked class="w-5 h-5 text-purple-600 rounded border-gray-300 focus:ring-purple-500 cursor-pointer">
+                    <input type="checkbox" name="mock-book" value="main" checked class="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer">
+                    <span class="text-gray-700 font-medium text-sm md:text-base">📘 수능특강</span>
+                </label>
+                <label class="flex items-center gap-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-gray-200">
+                    <input type="checkbox" name="mock-book" value="suwan" checked class="w-5 h-5 text-orange-500 rounded border-gray-300 focus:ring-orange-500 cursor-pointer">
+                    <span class="text-gray-700 font-medium text-sm md:text-base">📙 수능완성</span>
+                </label>
+            `;
+
+            let chapterCheckboxesHtml = chaptersInfo.map(ch => `
+                <label class="flex items-center gap-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-gray-200">
+                    <input type="checkbox" name="mock-chapter" value="${ch.id}" checked class="w-5 h-5 text-purple-600 rounded border-gray-300 focus:ring-purple-500 cursor-pointer">
                     <span class="text-gray-700 font-medium text-sm md:text-base">${ch.title}</span>
                 </label>
             `).join('');
@@ -345,11 +440,16 @@
                         <svg class="w-10 h-10 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                     </div>
                     <h3 class="text-2xl md:text-3xl font-extrabold text-gray-800 mb-4 tracking-tight">모의고사 설정</h3>
-                    <p class="text-gray-500 mb-8 max-w-md mx-auto leading-relaxed">선택된 범위 내에서 무작위로 20문제가 출제됩니다.</p>
+                    <p class="text-gray-500 mb-8 max-w-md mx-auto leading-relaxed">선택된 교재와 범위 내에서 무작위로 20문제가 출제됩니다.</p>
                     
+                    <div class="text-left max-w-2xl mx-auto mb-6 bg-slate-50 p-6 rounded-2xl border border-gray-200 shadow-inner">
+                        <h4 class="font-bold text-gray-700 mb-4 px-2 flex items-center gap-2">📚 교재 선택</h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" id="mock-book-checkboxes">${bookCheckboxesHtml}</div>
+                    </div>
+
                     <div class="text-left max-w-2xl mx-auto mb-10 bg-slate-50 p-6 rounded-2xl border border-gray-200 shadow-inner">
-                        <h4 class="font-bold text-gray-700 mb-4 px-2 flex items-center gap-2">출제 범위 선택</h4>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" id="mock-chapter-checkboxes">${checkboxesHtml}</div>
+                        <h4 class="font-bold text-gray-700 mb-4 px-2 flex items-center gap-2">🎯 단원 선택</h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" id="mock-chapter-checkboxes">${chapterCheckboxesHtml}</div>
                     </div>
 
                     <button onclick="startMockExam()" class="px-8 py-4 bg-purple-600 text-white text-lg rounded-2xl hover:bg-purple-700 font-bold flex items-center justify-center gap-3 mx-auto w-full sm:w-auto shadow-md">
@@ -370,23 +470,35 @@
             if(window.innerWidth < 768 && !sidebar.classList.contains('-translate-x-full')) toggleSidebar();
         }
 
-        function startMockExam() {
-            const checkboxes = document.querySelectorAll('#mock-chapter-checkboxes input[type="checkbox"]:checked');
-            const selectedChapterIds = Array.from(checkboxes).map(cb => cb.value);
+        window.startMockExam = function() {
+            const bookCheckboxes = document.querySelectorAll('#mock-book-checkboxes input[type="checkbox"]:checked');
+            const chapterCheckboxes = document.querySelectorAll('#mock-chapter-checkboxes input[type="checkbox"]:checked');
+            
+            const selectedBookIds = Array.from(bookCheckboxes).map(cb => cb.value);
+            const selectedChapterIds = Array.from(chapterCheckboxes).map(cb => cb.value);
 
+            if (selectedBookIds.length === 0) {
+                showModal("출제할 교재를 최소 1개 이상 선택해주세요.");
+                return;
+            }
             if (selectedChapterIds.length === 0) {
                 showModal("출제할 단원을 최소 1개 이상 선택해주세요.");
                 return;
             }
 
-            // 현재 선택된 교재 내에서만 필터링
-            const filteredQuestions = db.questions[currentBookId].filter(q => selectedChapterIds.includes(q.chapterId));
+            // 다중 교재 및 다중 단원 필터링
+            let filteredQuestions = [];
+            selectedBookIds.forEach(bId => {
+                const qList = db.questions[bId].filter(q => selectedChapterIds.includes(q.chapterId));
+                filteredQuestions = filteredQuestions.concat(qList);
+            });
 
             if (filteredQuestions.length === 0) {
-                showModal("선택한 단원에 문제가 없습니다. 파일이 업로드 되어있는지 확인해주세요.");
+                showModal("선택한 범위에 문제가 없습니다. 파일이 업로드 되어있는지 확인해주세요.");
                 return;
             }
 
+            // 섞기
             const allQuestions = [...filteredQuestions];
             for (let i = allQuestions.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
@@ -410,7 +522,7 @@
             container.innerHTML = '';
             
             if (questions.length === 0) {
-                container.innerHTML = `<div class="bg-white p-10 rounded-2xl shadow-sm text-center border border-gray-100 fade-in"><p class="text-gray-500">문제가 없습니다. 폴더에 파일이 있는지 확인해주세요.</p></div>`;
+                container.innerHTML = `<div class="bg-white p-10 rounded-2xl shadow-sm text-center border border-gray-100 fade-in"><p class="text-gray-500">이 단원에는 아직 문제가 없습니다.</p></div>`;
                 return;
             }
 
@@ -420,9 +532,12 @@
                 qEl.style.animationDelay = `${index * 0.05}s`;
                 
                 let questionLabel = isMock ? `문제 ${index + 1}` : `문제 ${q.number}`;
+                let chapterTitle = chaptersInfo.find(c=>c.id===q.chapterId)?.title.split(' ')[0] || '';
+                
+                // 모의고사일 땐 단원과 교재 출처를 같이 띄워줌
                 let sourceBadge = isMock 
-                    ? `<span class="px-3 py-1 bg-purple-50 text-purple-600 rounded-full text-xs font-bold border border-purple-100">${chaptersInfo.find(c=>c.id===q.chapterId)?.title.split(' ')[0]} 단원</span>` 
-                    : `<span class="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-bold border border-blue-100">${booksConfig[currentBookId].title}</span>`;
+                    ? `<div class="flex gap-1.5"><span class="px-2.5 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs font-bold border border-gray-200">[${booksConfig[q.bookId].shortTitle}]</span><span class="px-2.5 py-1 bg-purple-50 text-purple-600 rounded-lg text-xs font-bold border border-purple-100">${chapterTitle} 단원</span></div>` 
+                    : `<span class="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold border border-blue-100">${booksConfig[q.bookId].title}</span>`;
 
                 qEl.innerHTML = `
                     <div class="p-6 md:p-8">
@@ -431,28 +546,29 @@
                             ${sourceBadge}
                         </div>
                         
-                        <div class="draw-toolbar flex justify-end gap-2 mb-3">
-                            <div id="draw-tools-${q.id}" class="hidden items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-lg shadow-inner">
-                                <button onclick="setDrawColor('${q.id}', 'black', this)" class="w-6 h-6 rounded-full bg-black ring-2 ring-offset-1 ring-gray-400 transition-all color-btn-${q.id}"></button>
-                                <button onclick="setDrawColor('${q.id}', 'red', this)" class="w-6 h-6 rounded-full bg-red-500 ring-2 ring-offset-1 ring-transparent transition-all color-btn-${q.id}"></button>
-                                <button onclick="setDrawColor('${q.id}', 'blue', this)" class="w-6 h-6 rounded-full bg-blue-500 ring-2 ring-offset-1 ring-transparent transition-all color-btn-${q.id}"></button>
-                                <div class="w-px h-5 bg-gray-300 mx-1"></div>
-                                <button onclick="setDrawMode('${q.id}', 'eraser')" class="text-sm font-bold text-gray-600 hover:text-gray-900 px-2 py-1 rounded hover:bg-gray-200">지우개</button>
-                                <button onclick="clearCanvas('${q.id}')" class="text-sm font-bold text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50">전체지우기</button>
+                        <!-- 아주 컴팩트해진 필기 도구 UI -->
+                        <div class="draw-toolbar flex flex-wrap justify-end gap-1.5 mb-3 print:hidden">
+                            <div id="draw-tools-${q.id}" class="hidden flex-nowrap items-center gap-1.5 bg-gray-100 px-2 py-1 rounded-lg shadow-inner">
+                                <button onclick="setDrawColor('${q.id}', 'black', this)" class="w-5 h-5 rounded-full bg-black ring-2 ring-offset-1 ring-gray-400 transition-all color-btn-${q.id}"></button>
+                                <button onclick="setDrawColor('${q.id}', 'red', this)" class="w-5 h-5 rounded-full bg-red-500 ring-2 ring-offset-1 ring-transparent transition-all color-btn-${q.id}"></button>
+                                <button onclick="setDrawColor('${q.id}', 'blue', this)" class="w-5 h-5 rounded-full bg-blue-500 ring-2 ring-offset-1 ring-transparent transition-all color-btn-${q.id}"></button>
+                                <div class="w-px h-4 bg-gray-300 mx-0.5"></div>
+                                <button onclick="setDrawMode('${q.id}', 'eraser')" class="text-xs font-bold text-gray-600 hover:text-gray-900 px-1.5 py-1 rounded hover:bg-gray-200">지우개</button>
+                                <button onclick="clearCanvas('${q.id}')" class="text-xs font-bold text-red-500 hover:text-red-700 px-1.5 py-1 rounded hover:bg-red-50">전체지우기</button>
                             </div>
-                            <button onclick="toggleDrawMode('${q.id}')" id="btn-draw-${q.id}" class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-medium flex items-center gap-1.5 text-sm border border-gray-200">
-                                ✏️ 필기 켜기
+                            <button onclick="toggleDrawMode('${q.id}')" id="btn-draw-${q.id}" class="px-2 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-bold flex items-center gap-1 text-xs border border-gray-200 whitespace-nowrap">
+                                ✏️ 필기
                             </button>
                         </div>
 
-                        <div class="question-image-section mb-8 border border-gray-100 rounded-xl p-3 bg-gray-50 flex justify-center overflow-hidden">
+                        <div class="question-image-section mb-8 border border-gray-100 rounded-xl p-3 bg-gray-50 flex justify-center overflow-hidden relative">
                             <div class="relative inline-block max-w-full">
                                 <img id="img-${q.id}" src="${q.questionImage}" alt="${questionLabel}" class="max-w-full h-auto rounded-lg select-none" draggable="false" onload="setupCanvas('${q.id}')" onerror="this.src='https://placehold.co/800x400/f8fafc/94a3b8?text=이미지+로드+실패'">
                                 <canvas id="canvas-${q.id}" class="absolute top-0 left-0 w-full h-full touch-none z-10 rounded-lg" style="pointer-events: none;"></canvas>
                             </div>
                         </div>
 
-                        <div class="flex justify-end border-t border-gray-100 pt-4 mt-2">
+                        <div class="flex justify-end border-t border-gray-100 pt-4 mt-2 print:hidden">
                             <button onclick="toggleAnswer('${q.id}')" id="btn-toggle-${q.id}" class="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-all font-medium flex items-center gap-1.5 shadow-sm hover:shadow">
                                 <span>정답 및 해설 보기</span>
                                 <svg class="w-4 h-4 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -461,7 +577,7 @@
                     </div>
 
                     <div id="answer-${q.id}" class="answer-section hidden border-t-2 border-dashed border-gray-200 bg-slate-50/50 p-6 md:p-8">
-                        <h4 class="font-extrabold text-gray-700 mb-4 flex items-center gap-2 text-lg">
+                        <h4 class="font-extrabold text-gray-700 mb-4 flex items-center gap-2 text-lg print:hidden">
                             <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                             정답 및 해설
                         </h4>
@@ -497,7 +613,7 @@
             }
         };
 
-        // 폴더 스캔 (이진 탐색)
+        // 폴더 스캔 (이진 탐색 알고리즘)
         async function checkFileExists(url) {
             try {
                 const response = await fetch(url, { method: 'HEAD', cache: 'no-cache' });
@@ -511,6 +627,7 @@
             let low = 1;
             let high = 1;
             if (!(await checkFileExists(`${dirPath}/1번_문제.png`))) return 0; 
+            
             while (await checkFileExists(`${dirPath}/${high}번_문제.png`)) {
                 low = high;
                 high *= 2;
@@ -549,37 +666,34 @@
             }
         }
 
-        // 교재 변경 함수
         window.changeBook = async function(bookId) {
             currentBookId = bookId;
             currentChapterId = null;
             isMockExamMode = false;
             stopTimer();
 
-            // UI 리셋
             currentChapterTitle.innerText = "단원을 선택해주세요";
             currentChapterDesc.innerText = "왼쪽 메뉴에서 단원이나 기능을 선택하세요.";
             emptyState.classList.remove('hidden');
             questionContainer.classList.add('hidden');
             document.getElementById('welcome-title').innerText = `${booksConfig[bookId].title} 학습 시작!`;
 
-            isScanning = true;
-            showModal("문제를 스캔중입니다.");
-            await scanBook(bookId);
-            isScanning = false;
-            closeModal();
-            
             renderNavigation();
         }
 
         async function initApp() {
             isScanning = true;
             showModal("문제를 스캔중입니다.");
-            await scanBook(currentBookId);
+            
+            // 앱 로딩 시 수능특강과 수능완성 모두 백그라운드 스캔 (모의고사 믹스를 위해)
+            await scanBook('main');
+            await scanBook('suwan');
+            
             isScanning = false;
             closeModal();
             
-            renderNavigation();
+            // 초기 화면 렌더링
+            changeBook('main'); 
         }
 
         // 캔버스 필기 기능
@@ -627,7 +741,7 @@
                 e.preventDefault();
                 const pos = getMousePos(e);
                 const scaleRatio = canvas.width / img.clientWidth;
-                state.ctx.lineWidth = scaleRatio * (state.mode === 'eraser' ? 25 : 3);
+                state.ctx.lineWidth = scaleRatio * (state.mode === 'eraser' ? 30 : 3);
                 
                 if (state.mode === 'eraser') {
                     state.ctx.globalCompositeOperation = 'destination-out';
@@ -665,7 +779,7 @@
                 tools.classList.add('flex');
             } else {
                 canvas.style.pointerEvents = 'none';
-                btn.innerHTML = '✏️ 필기 켜기';
+                btn.innerHTML = '✏️ 필기';
                 btn.classList.remove('bg-blue-100', 'text-blue-700', 'border-blue-300');
                 btn.classList.add('bg-gray-100', 'text-gray-700');
                 tools.classList.add('hidden');
