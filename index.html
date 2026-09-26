@@ -61,7 +61,7 @@
         </div>
     </div>
 
-    <!-- Sidebar (폰트 크기 전체적으로 축소) -->
+    <!-- Sidebar (폰트 크기 축소됨) -->
     <aside id="sidebar" class="w-64 bg-white border-r border-gray-200 z-40 flex-shrink-0 transition-transform duration-300 absolute md:static h-full transform -translate-x-full md:translate-x-0 flex flex-col shadow-[4px_0_24px_rgba(0,0,0,0.02)] hidden md:flex">
         <div class="p-5 flex-1 overflow-y-auto">
             <div class="flex justify-between items-center mb-6 pb-4 border-b border-gray-100">
@@ -133,7 +133,7 @@
             { id: 'ch4', title: '4. 상호작용' },
             { id: 'ch5', title: '5. 별과 외계 행성계' },
             { id: 'ch6', title: '6. 외부 은하와 우주 팽창' },
-            { id: 'ch7', title: '7. 수능완성 실전 모의고사' } // 수능완성 전용
+            { id: 'ch7', title: '7. 실전 모의고사' } // 수능완성 전용
         ];
 
         // 📚 교재(Book) 설정 및 단원 분류 기준
@@ -196,9 +196,6 @@
         let currentPage = 1;
         const itemsPerPage = 5;
         let isRandomMode = false;
-        
-        // 애플펜슬 모드 (팜 리젝션) 글로벌 변수
-        let isPenOnlyMode = false;
 
         function toggleSidebar() {
             if (window.innerWidth < 768) {
@@ -465,21 +462,6 @@
             setTimeout(() => { document.getElementById('mock-questions-render-area').scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
         }
 
-        window.toggleGlobalPenMode = function() {
-            isPenOnlyMode = !isPenOnlyMode;
-            document.querySelectorAll('.pen-mode-btn').forEach(btn => {
-                if (isPenOnlyMode) {
-                    btn.innerHTML = '✋ 터치방지: ON';
-                    btn.classList.add('text-blue-700', 'bg-blue-100');
-                    btn.classList.remove('text-gray-500', 'hover:bg-gray-200');
-                } else {
-                    btn.innerHTML = '✋ 터치방지: OFF';
-                    btn.classList.remove('text-blue-700', 'bg-blue-100');
-                    btn.classList.add('text-gray-500', 'hover:bg-gray-200');
-                }
-            });
-        }
-
         function renderQuestions(questions, isMock = false, targetId = 'question-container') {
             const container = document.getElementById(targetId);
             container.innerHTML = '';
@@ -502,11 +484,6 @@
                     ? `<div class="flex gap-1.5"><span class="px-2 py-1 ${bookBadgeColor} rounded text-[11px] font-bold border">[${booksConfig[q.bookId].shortTitle}]</span><span class="px-2 py-1 bg-purple-50 text-purple-600 rounded text-[11px] font-bold border border-purple-100">${chapterTitle} 단원</span></div>` 
                     : `<span class="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold border border-blue-100">${booksConfig[q.bookId].title}</span>`;
 
-                let penModeBtnStyle = isPenOnlyMode 
-                    ? 'text-blue-700 bg-blue-100' 
-                    : 'text-gray-500 hover:bg-gray-200';
-                let penModeBtnText = isPenOnlyMode ? '✋ 터치방지: ON' : '✋ 터치방지: OFF';
-
                 qEl.innerHTML = `
                     <div class="p-6 md:p-8">
                         <div class="flex items-center justify-between mb-4">
@@ -524,8 +501,6 @@
                                 <div class="flex items-center gap-1">
                                     <button onclick="setDrawMode('${q.id}', 'eraser')" class="text-xs font-bold text-gray-600 hover:text-gray-900 px-2 py-1 rounded hover:bg-gray-200 transition-colors">지우개</button>
                                     <button onclick="clearCanvas('${q.id}')" class="text-xs font-bold text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50 transition-colors">모두지우기</button>
-                                    <div class="w-px h-3 bg-gray-300 mx-1"></div>
-                                    <button onclick="toggleGlobalPenMode()" class="pen-mode-btn text-[11px] font-bold px-2 py-1 rounded transition-colors ${penModeBtnStyle}" title="스마트펜/마우스만 인식하고 손가락 터치는 무시합니다.">${penModeBtnText}</button>
                                 </div>
                             </div>
                             <button onclick="toggleDrawMode('${q.id}')" id="btn-draw-${q.id}" class="ml-2 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-bold flex items-center gap-1 text-xs border border-gray-200 shadow-sm">
@@ -622,7 +597,7 @@
             changeBook('main'); 
         }
 
-        // 캔버스 필기 기능 (PointerEvent 기반 - 팜 리젝션 지원)
+        // 캔버스 필기 기능 (PointerEvent 기반)
         const canvasContexts = {};
         window.setupCanvas = function(qId) {
             const img = document.getElementById(`img-${qId}`);
@@ -644,8 +619,6 @@
 
             const startDrawing = (e) => {
                 if (canvas.style.pointerEvents === 'none') return;
-                // 팜 리젝션: 애플펜슬 모드일 때 터치는 무시 (마우스나 펜만 허용)
-                if (isPenOnlyMode && e.pointerType === 'touch') return;
                 // 마우스일 경우 좌클릭만 허용
                 if (e.pointerType === 'mouse' && e.buttons !== 1) return;
 
