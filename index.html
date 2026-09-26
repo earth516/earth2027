@@ -530,6 +530,25 @@
             return maxFound;
         }
 
+        async function scanBook(bookId) {
+            if (db.questions[bookId].length > 0) return; // 이미 스캔됨
+            
+            const config = booksConfig[bookId];
+            const maxNum = await findMaxQuestionCount(config.qDir);
+            
+            for (let i = 1; i <= maxNum; i++) {
+                const chapterId = config.getChapterId(i);
+                db.questions[bookId].push({
+                    id: `${bookId}_q_${i}`,
+                    bookId: bookId,
+                    chapterId: chapterId,
+                    number: i,
+                    questionImage: `${config.qDir}/${i}번_문제.png`,
+                    answerImage: `${config.aDir}/${i}번_해설.png`
+                });
+            }
+        }
+
         // 교재 변경 함수
         window.changeBook = async function(bookId) {
             currentBookId = bookId;
@@ -544,37 +563,22 @@
             questionContainer.classList.add('hidden');
             document.getElementById('welcome-title').innerText = `${booksConfig[bookId].title} 학습 시작!`;
 
-            await scanCurrentBook();
+            isScanning = true;
+            showModal("문제를 스캔중입니다.");
+            await scanBook(bookId);
+            isScanning = false;
+            closeModal();
+            
             renderNavigation();
         }
 
-        async function scanCurrentBook() {
-            // 이미 스캔된 교재면 다시 스캔하지 않음
-            if (db.questions[currentBookId].length > 0) return;
-
+        async function initApp() {
             isScanning = true;
             showModal("문제를 스캔중입니다.");
-            
-            const config = booksConfig[currentBookId];
-            const maxNum = await findMaxQuestionCount(config.qDir);
-            
-            for (let i = 1; i <= maxNum; i++) {
-                const chapterId = config.getChapterId(i);
-                db.questions[currentBookId].push({
-                    id: `${currentBookId}_q_${i}`,
-                    chapterId: chapterId,
-                    number: i,
-                    questionImage: `${config.qDir}/${i}번_문제.png`,
-                    answerImage: `${config.aDir}/${i}번_해설.png`
-                });
-            }
-
+            await scanBook(currentBookId);
             isScanning = false;
             closeModal();
-        }
-
-        async function initApp() {
-            await scanCurrentBook();
+            
             renderNavigation();
         }
 
